@@ -1,5 +1,5 @@
 """
-app.py — 개선판
+app.py -- 개선판
 
 [수정 사항]
 1. 성과 요약: CAGR → XIRR (적립식 내부수익률)로 교체
@@ -303,10 +303,15 @@ with tab1:
     else:
         st.markdown('<div class="section-label">보유 종목 현황</div>', unsafe_allow_html=True)
 
+        # 시세 미조회 상태의 기본 테이블 (숫자형 유지, None으로 미조회 표시)
         df_hold = pd.DataFrame(
-            [(t, f"{s:.6f}", "–", "–") for t, s in holdings.items()],
+            [(t, s, None, None) for t, s in holdings.items()],
             columns=["티커", "보유 수량", "현재가 (USD)", "평가금액 (KRW)"],
         )
+        hold_col_cfg = {
+            "현재가 (USD)": st.column_config.NumberColumn(format="$%.2f"),
+            "평가금액 (KRW)": st.column_config.NumberColumn(format="₩%.0f"),
+        }
 
         if st.button("🔄 시세 갱신", key="btn_refresh"):
             with st.spinner("시세 가져오는 중..."):
@@ -321,7 +326,7 @@ with tab1:
 
             if fx_est:
                 st.markdown(
-                    '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 — 추정값 사용 중</div>',
+                    '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 -- 추정값 사용 중</div>',
                     unsafe_allow_html=True,
                 )
 
@@ -330,18 +335,15 @@ with tab1:
             for t, s in holdings.items():
                 try:
                     p = float(prices[t])
-                    price_str = f"${p:,.2f}"
                 except (KeyError, TypeError, ValueError):
                     p = None
-                    price_str = "N/A"
 
                 if p is not None:
                     val = p * s * fx
                     total_krw += val
-                    val_str = f"₩{val:,.0f}"
                 else:
-                    val_str = "N/A"
-                rows.append((t, f"{s:.6f}", price_str, val_str))
+                    val = None
+                rows.append((t, s, p, val))
 
             df_hold = pd.DataFrame(rows, columns=["티커", "보유 수량", "현재가 (USD)", "평가금액 (KRW)"])
 
@@ -363,7 +365,7 @@ with tab1:
             )
             st.write("")
 
-        st.dataframe(df_hold, width="stretch", hide_index=True)
+        st.dataframe(df_hold, column_config=hold_col_cfg, width="stretch", hide_index=True)
 
 # ══════════════════════════════════════════════
 # 탭 2 : 매수 추천
@@ -431,7 +433,7 @@ with tab2:
 
         if fx_est:
             st.markdown(
-                '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 — 추정값 사용</div>',
+                '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 -- 추정값 사용</div>',
                 unsafe_allow_html=True,
             )
 
@@ -459,20 +461,26 @@ with tab2:
         for t in tickers_r:
             try:
                 p = float(prices_r[t])
-                price_str = f"${p:,.2f}"
             except (KeyError, TypeError, ValueError):
-                price_str = "N/A"
+                p = None
 
             rows.append({
-                "티커":          t,
-                "목표 비중":     f"{safe_get(weights, t):.1%}",
-                "현재가 (USD)":  price_str,
-                "매수금액 (KRW)": f"₩{safe_get(buy_krw, t):,.0f}",
-                "매수금액 (USD)": f"${safe_get(buy_usd, t):,.2f}",
-                "매수 수량":     f"{safe_get(buy_shares, t):.4f}",
+                "티커":           t,
+                "목표 비중 (%)":  safe_get(weights, t) * 100,
+                "현재가 (USD)":   p,
+                "매수금액 (KRW)": safe_get(buy_krw, t),
+                "매수금액 (USD)": safe_get(buy_usd, t),
+                "매수 수량":      safe_get(buy_shares, t),
             })
 
-        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        buy_col_cfg = {
+            "목표 비중 (%)":  st.column_config.NumberColumn(format="%.1f%%"),
+            "현재가 (USD)":   st.column_config.NumberColumn(format="$%.2f"),
+            "매수금액 (KRW)": st.column_config.NumberColumn(format="₩%.0f"),
+            "매수금액 (USD)": st.column_config.NumberColumn(format="$%.2f"),
+            "매수 수량":      st.column_config.NumberColumn(format="%.4f"),
+        }
+        st.dataframe(pd.DataFrame(rows), column_config=buy_col_cfg, width="stretch", hide_index=True)
 
         total_buy = safe_sum(buy_krw)
         st.markdown(
@@ -651,27 +659,34 @@ with tab3:
             xirr_val = calc_xirr_from_backtest(
                 df_bt, portfolio.weekly_budget, col=col
             )
+            xirr_pct = xirr_val * 100 if not np.isnan(xirr_val) else None
 
             running_max = df_bt[col].cummax()
             mdd = ((running_max - df_bt[col]) / running_max.replace(0, np.nan)).max() * 100
 
             summary_rows.append({
-                "전략/벤치마크":  "✅ KH 전략" if col == "KH_Strategy" else col,
-                "최종 평가금액":  f"₩{final / 1_000_000:.2f}M",
-                "누적 수익률":    f"{ret_pct:+.1f}%",
-                "XIRR (연수익률)": fmt_xirr(xirr_val),
-                "MDD":            f"{mdd:.1f}%",
+                "전략/벤치마크":   "✅ KH 전략" if col == "KH_Strategy" else col,
+                "최종 평가금액 (M원)": final / 1_000_000,
+                "누적 수익률 (%)":  ret_pct,
+                "XIRR (%)":        xirr_pct,
+                "MDD (%)":         mdd,
             })
 
         summary_rows.append({
-            "전략/벤치마크":  "📌 누적 투자금",
-            "최종 평가금액":  f"₩{invested / 1_000_000:.2f}M",
-            "누적 수익률":    "–",
-            "XIRR (연수익률)": "–",
-            "MDD":            "–",
+            "전략/벤치마크":   "📌 누적 투자금",
+            "최종 평가금액 (M원)": invested / 1_000_000,
+            "누적 수익률 (%)":  None,
+            "XIRR (%)":        None,
+            "MDD (%)":         None,
         })
 
-        st.dataframe(pd.DataFrame(summary_rows), width="stretch", hide_index=True)
+        bt_col_cfg = {
+            "최종 평가금액 (M원)": st.column_config.NumberColumn(format="₩%.2fM"),
+            "누적 수익률 (%)":     st.column_config.NumberColumn(format="%+.1f%%"),
+            "XIRR (%)":           st.column_config.NumberColumn(format="%+.1f%%", help="계산불가 시 빈칸"),
+            "MDD (%)":            st.column_config.NumberColumn(format="%.1f%%"),
+        }
+        st.dataframe(pd.DataFrame(summary_rows), column_config=bt_col_cfg, width="stretch", hide_index=True)
         st.caption(
             f"기간: {df_bt.index[0].date()} ~ {df_bt.index[-1].date()} | "
             "XIRR = 각 투자 시점을 반영한 실질 연수익률 (적립식 표준 지표)"

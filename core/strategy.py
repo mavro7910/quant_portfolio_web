@@ -1,9 +1,9 @@
 """
-core/strategy.py — 개선판
+core/strategy.py -- 개선판
 
 [수정 사항]
 1. [BUG FIX] Look-ahead bias: 백테스트에서 mcap 대신 발행주수×과거주가로 시총 근사
-2. [BUG FIX] CAGR → XIRR(내부수익률)로 교체 — 적립식 수익률 현실화
+2. [BUG FIX] CAGR → XIRR(내부수익률)로 교체 -- 적립식 수익률 현실화
 3. [유지] use_market_cap=True 시 시총을 루프 시작 전 1회만 조회
 4. [유지] alloc_krw=0 종목 0나눗셈/NaN 방지
 5. [유지] rebal_days 날짜 조회 빈 배열 IndexError 방어
@@ -75,7 +75,7 @@ def fetch_prices(
 
 
 def fetch_market_caps(tickers: list[str]) -> pd.Series:
-    """시가총액 조회 (매수추천 전용 — 백테스트에서는 사용 금지)."""
+    """시가총액 조회 (매수추천 전용 -- 백테스트에서는 사용 금지)."""
     caps = {}
     for t in tickers:
         try:
@@ -272,7 +272,7 @@ def buy_recommendation(
 
     curr_p = prices_df.iloc[-1]
 
-    # 매수추천은 현재 시총 사용 (look-ahead 무관 — 현재 시점 결정)
+    # 매수추천은 현재 시총 사용 (look-ahead 무관 -- 현재 시점 결정)
     mcap_cache = fetch_market_caps(tickers) if use_market_cap else None
 
     w_target, is_bull = target_weights(
@@ -287,18 +287,11 @@ def buy_recommendation(
     w_final = w_target.loc[top_tickers]
     w_final = w_final / w_final.sum()
 
-    h_series     = pd.Series(holdings).reindex(tickers).fillna(0)
-    curr_val_usd = (curr_p * h_series).reindex(top_tickers).fillna(0)
-    total_usd    = (curr_p * h_series).sum()
-    curr_w       = (curr_val_usd / total_usd) if total_usd > 0 else pd.Series(0.0, index=top_tickers)
+    h_series  = pd.Series(holdings).reindex(tickers).fillna(0)
+    total_usd = (curr_p * h_series).sum()
 
-    shortage_usd   = ((w_final - curr_w) * (total_usd + budget_krw / fx_rate)).clip(lower=0)
-    total_shortage = shortage_usd.sum()
-
-    if total_shortage > 0:
-        buy_usd = shortage_usd / total_shortage * (budget_krw / fx_rate)
-    else:
-        buy_usd = pd.Series(budget_krw / fx_rate / len(top_tickers), index=top_tickers)
+    # 팩터 비중 그대로 예산 단순 배분
+    buy_usd = w_final * (budget_krw / fx_rate)
 
     buy_krw    = buy_usd * fx_rate
     p_safe     = curr_p.reindex(top_tickers).replace(0, np.nan).fillna(1.0)
@@ -417,18 +410,8 @@ def run_backtest(
             w_t   = w_t.loc[top_t]
             w_t   = w_t / w_t.sum()
 
-        cur_val_krw = (shares_kh * cp.fillna(0) * cfx).sum()
-        new_total   = cur_val_krw + weekly_budget
-
-        target_krw = w_t * new_total
-        cur_krw    = shares_kh * cp.fillna(0) * cfx
-        shortage   = (target_krw - cur_krw).clip(lower=0)
-        total_sh   = shortage.sum()
-
-        if total_sh > 0:
-            alloc_krw = shortage / total_sh * weekly_budget
-        else:
-            alloc_krw = w_t * weekly_budget
+        # 팩터 비중 그대로 주간 예산 단순 배분
+        alloc_krw = w_t * weekly_budget
 
         for t in tickers:
             if valid_mask.get(t, False) and alloc_krw.get(t, 0) > 0:
