@@ -369,8 +369,8 @@ with tab1:
             "보유 수량",
             min_value=0.0,
             max_value=9_999_999.0,
-            value=1.0,
-            step=0.1,
+            value=0.0,
+            step=0.0001,
             format="%.6f",
             key="inp_shares",
         )
