@@ -367,7 +367,7 @@ with tab1:
     with col_s:
         new_shares = st.number_input(
             "보유 수량",
-            min_value=0.000001,
+            min_value=0.0,
             max_value=9_999_999.0,
             value=1.0,
             step=0.1,
