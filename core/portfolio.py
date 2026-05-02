@@ -146,10 +146,10 @@ class Portfolio:
         except (TypeError, ValueError):
             raise ValueError(f"수량이 올바르지 않습니다: {shares!r}")
 
-        if shares <= 0:
-            self.holdings.pop(ticker, None)
-        else:
-            self.holdings[ticker] = shares
+        if shares < 0:
+            raise ValueError("수량은 0 이상이어야 합니다.")
+        
+        self.holdings[ticker] = shares  # 0도 정상 저장
 
     def remove_holding(self, ticker: str) -> None:
         self.holdings.pop(ticker.upper().strip(), None)
