@@ -513,6 +513,15 @@ with tab2:
     with col_run:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_buy = st.button("▶ 매수 추천 실행", key="btn_buy")
+    
+    n_tickers = st.number_input(
+        "추천 종목 수",
+        min_value=1,
+        max_value=len(portfolio.tickers()) if portfolio.tickers() else 20,
+        value=min(10, len(portfolio.tickers())) if portfolio.tickers() else 10,
+        step=1,
+        help="포트폴리오 내 종목 중 상위 N개에만 이번 주 예산을 배분합니다.",
+    )
 
     if run_buy:
         if not portfolio.tickers():
@@ -526,6 +535,7 @@ with tab2:
                         holdings=portfolio.holdings,
                         budget_krw=budget,
                         use_market_cap=use_mcap,
+                        top_n=n_tickers,  # ← 추가
                     )
                     st.session_state["buy_result"] = res
                 except Exception as e:
@@ -604,27 +614,43 @@ with tab2:
         pie_labels = tickers_r
         pie_values = [safe_get(weights, t) for t in tickers_r]
 
+
         fig_pie = go.Figure(go.Pie(
             labels=pie_labels,
             values=pie_values,
             hole=0.45,
-            textinfo="label+percent",
+            textinfo="percent",           # 파이 안에는 퍼센트만
+            texttemplate="%{percent:.1%}",
+            textposition="inside",
+            insidetextorientation="radial",
             marker=dict(colors=[
                 "#3949ab", "#1e88e5", "#00acc1", "#43a047",
                 "#fb8c00", "#e53935", "#8e24aa", "#00897b",
                 "#f4511e", "#6d4c41"
             ]),
         ))
+
+        n = len(pie_labels)
         fig_pie.update_layout(
             title="목표 비중",
             paper_bgcolor="#1a1f2e",
             plot_bgcolor="#1a1f2e",
             font_color="#e0e0e0",
             margin=dict(t=40, b=10, l=10, r=10),
-            height=320,
-            showlegend=False,
+            height=320 + n * 20,          # 범례 공간 확보
+            showlegend=True,               # 범례 ON
+            legend=dict(
+                orientation="v",
+                x=1.02,
+                y=0.5,
+                font=dict(color="#e0e0e0", size=11),
+                bgcolor="rgba(0,0,0,0)",
+            ),
         )
+
         st.plotly_chart(fig_pie, width="stretch", key="pie_chart")
+
+        
 
 # ══════════════════════════════════════════════
 # 탭 3 : 백테스트
@@ -686,6 +712,7 @@ with tab3:
                         period=period_str,
                         use_market_cap=use_mcap_bt,
                         progress_cb=progress_cb,
+                        top_n=n_tickers,  # ← 추가
                     )
                 st.session_state["bt_result"] = df_bt
                 progress_bar.progress(100)

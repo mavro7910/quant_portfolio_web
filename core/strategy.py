@@ -278,6 +278,7 @@ def run_backtest(
     period: str = "3y",
     use_market_cap: bool = True,
     progress_cb=None,
+    top_n: int | None = None,  # ← 추가 (None이면 전체)
 ) -> pd.DataFrame:
     """
     주간 적립식 백테스트.
@@ -349,6 +350,11 @@ def run_backtest(
             use_market_cap=use_market_cap,
             mcap_cache=mcap_cache,      # 캐시 전달 → API 재호출 없음
         )
+
+        if top_n is not None:
+            top_t = w_t.nlargest(top_n).index
+            w_t = w_t.loc[top_t]
+            w_t = w_t / w_t.sum()
 
         cur_val_krw = (shares_kh * cp.fillna(0) * cfx).sum()
         new_total   = cur_val_krw + weekly_budget
