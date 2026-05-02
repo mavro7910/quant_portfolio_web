@@ -370,7 +370,7 @@ with tab1:
             min_value=0.0,
             max_value=9_999_999.0,
             value=0.0,
-            step=0.0001,
+            step=0.000001,
             format="%.6f",
             key="inp_shares",
         )
