@@ -587,18 +587,18 @@ with tab3:
             y=df_bt["Invested"],
             name="누적 투자금",
             fill="tozeroy",
-            fillcolor="rgba(170,170,170,0.12)",
-            line=dict(color="#aaaaaa", width=1),
+            fillcolor="rgba(200,200,200,0.08)",
+            line=dict(color="#cccccc", width=1, dash="dot"),
         ))
 
         fig.add_trace(go.Scatter(
             x=df_bt.index,
             y=df_bt["KH_Strategy"],
             name="KH 전략",
-            line=dict(color="#3f51b5", width=2.5),
+            line=dict(color="#7dd3fc", width=3),
         ))
 
-        bm_colors = ["#e53935", "#43a047", "#fb8c00", "#9c27b0", "#00bcd4"]
+        bm_colors = ["#f87171", "#4ade80", "#fbbf24", "#c084fc", "#34d399"]
         bm_cols = [c for c in df_bt.columns if c not in ("KH_Strategy", "Invested")]
 
         for i, col in enumerate(bm_cols):
@@ -606,23 +606,37 @@ with tab3:
                 x=df_bt.index,
                 y=df_bt[col],
                 name=BENCHMARKS.get(col, col),
-                line=dict(color=bm_colors[i % len(bm_colors)], width=1.8, dash="dash"),
+                line=dict(color=bm_colors[i % len(bm_colors)], width=2, dash="dash"),
             ))
 
         fig.update_layout(
-            title="포트폴리오 성과 비교",
+            title=dict(text="포트폴리오 성과 비교", font=dict(color="#f1f5f9", size=16)),
             xaxis_title="날짜",
             yaxis_title="평가금액 (KRW)",
-            paper_bgcolor="#1a1f2e",
-            plot_bgcolor="#16213e",
-            font_color="#e0e0e0",
-            legend=dict(bgcolor="#1a1f2e", bordercolor="#2a3a5c", borderwidth=1),
+            paper_bgcolor="#0f1117",
+            plot_bgcolor="#1a1f2e",
+            font=dict(color="#f1f5f9", size=13),
+            legend=dict(
+                bgcolor="rgba(15,17,23,0.85)",
+                bordercolor="#4a5568",
+                borderwidth=1,
+                font=dict(color="#f1f5f9", size=12),
+            ),
             hovermode="x unified",
-            margin=dict(t=50, b=40, l=60, r=20),
-            height=450,
-            yaxis=dict(tickformat=",.0f"),
-            xaxis=dict(gridcolor="#2a3a5c"),
-            yaxis_gridcolor="#2a3a5c",
+            hoverlabel=dict(bgcolor="#1e293b", font_color="#f1f5f9"),
+            margin=dict(t=60, b=50, l=70, r=20),
+            height=480,
+            yaxis=dict(
+                tickformat=",.0f",
+                gridcolor="#2d3748",
+                tickfont=dict(color="#cbd5e1"),
+                title_font=dict(color="#cbd5e1"),
+            ),
+            xaxis=dict(
+                gridcolor="#2d3748",
+                tickfont=dict(color="#cbd5e1"),
+                title_font=dict(color="#cbd5e1"),
+            ),
         )
         st.plotly_chart(fig, use_container_width=True, key="bt_chart")
 
@@ -714,8 +728,13 @@ with tab4:
 
     st.markdown('<div class="section-label">포트폴리오 JSON 불러오기</div>', unsafe_allow_html=True)
 
-    uploaded = st.file_uploader("portfolio.json 업로드", type=["json"])
-    if uploaded is not None:
+    uploaded = st.file_uploader("portfolio.json 업로드", type=["json"],
+                                key="json_uploader")
+
+    # 이미 처리한 파일은 재처리 방지 (rerun 루프 차단)
+    last_uploaded = st.session_state.get("_last_uploaded_name")
+
+    if uploaded is not None and uploaded.name != last_uploaded:
         try:
             raw_bytes = uploaded.read()
             if not raw_bytes:
@@ -730,8 +749,9 @@ with tab4:
                     portfolio._data = data
                     portfolio.save()
                     invalidate_cache("prices_data", "buy_result", "bt_result")
+                    # 처리 완료 표시 → rerun 후 중복 실행 방지
+                    st.session_state["_last_uploaded_name"] = uploaded.name
                     st.success("✅ 포트폴리오를 불러왔습니다!")
-                    st.rerun()
         except json.JSONDecodeError as e:
             st.error(f"JSON 파싱 오류: {e}")
         except UnicodeDecodeError:
