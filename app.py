@@ -5,7 +5,7 @@ Quant Portfolio Manager - Streamlit 웹 앱 버전
 PyQt6 데스크톱 앱을 모바일/브라우저에서 실행 가능한 웹앱으로 변환.
 core/ 폴더의 로직은 그대로 재사용.
 
-변경사항 (최신화):
+변경사항:
 
 - buy_krw dict/Series 타입 안전 처리
 - 종목 추가/삭제 시 세션 캐시 자동 무효화
