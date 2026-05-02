@@ -36,13 +36,27 @@ def fetch_prices(
     tickers: list[str],
     extra: list[str] | None = None,
     period: str = "3y",
+    start: str | None = None,   # ← 추가
+    end: str | None = None,     # ← 추가
 ) -> dict[str, pd.DataFrame | pd.Series]:
-    """주가 + 보조 시계열(QQQ, FX) 일괄 다운로드."""
-    extra = extra or []
+    """
+    start/end 를 지정하면 period 는 무시됩니다.
+    백테스트처럼 재현성이 필요한 경우 start/end 고정 사용을 권장합니다.
+    """
+    extra   = extra or []
     all_sym = list(dict.fromkeys(tickers + extra))
 
-    raw = yf.download(all_sym, period=period, interval="1d",
-                      auto_adjust=True, progress=False)
+    if start:
+        raw = yf.download(
+            all_sym, start=start, end=end,
+            interval="1d", auto_adjust=True, progress=False,
+        )
+    else:
+        raw = yf.download(
+            all_sym, period=period,
+            interval="1d", auto_adjust=True, progress=False,
+        )
+
     close = extract_close(raw).ffill()
 
     result: dict[str, pd.DataFrame | pd.Series] = {}
@@ -322,23 +336,15 @@ def run_backtest(
     use_market_cap: bool = True,
     progress_cb=None,
     top_n: int | None = None,
+    start: str | None = None,   # ← 추가
+    end: str | None = None,     # ← 추가
 ) -> pd.DataFrame:
-    """
-    주간 적립식 백테스트.
 
-    Look-ahead bias 개선:
-    - use_market_cap=True 시 '발행주수(현재) × 과거주가'로 시총 근사
-      → 순수 현재 시총 사용 대비 look-ahead 대폭 감소
-    - 발행주수는 루프 전 1회만 조회
-
-    Returns:
-        DataFrame(columns=KH_Strategy, <benchmarks>, Invested)
-        + xirr 컬럼은 app.py에서 calc_xirr_from_backtest()로 별도 계산
-    """
     benchmark_tickers = benchmark_tickers or list(BENCHMARKS.keys())
     extra = ["QQQ", "USDKRW=X"] + benchmark_tickers
 
-    data      = fetch_prices(tickers, extra=extra, period=period)
+    # ← start/end 전달
+    data = fetch_prices(tickers, extra=extra, period=period, start=start, end=end)
     prices    = data["prices"]
     qqq       = data.get("QQQ",      pd.Series(dtype=float))
     fx        = data.get("USDKRW=X", pd.Series(dtype=float))

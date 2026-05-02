@@ -549,6 +549,14 @@ with tab3:
             portfolio.benchmarks = bm_tickers
             portfolio.save()
 
+            # ── 고정 날짜 계산 ── ← 추가
+            from datetime import date, timedelta
+            period_to_days = {"2y": 730, "3y": 1095, "5y": 1825}
+            end_date   = date.today().strftime("%Y-%m-%d")
+            start_date = (
+                date.today() - timedelta(days=period_to_days[period_str])
+            ).strftime("%Y-%m-%d")
+
             progress_bar = st.progress(0)
             status_text  = st.empty()
 
@@ -567,6 +575,8 @@ with tab3:
                         use_market_cap=use_mcap_bt,
                         progress_cb=progress_cb,
                         top_n=int(n_tickers),
+                        start=start_date,   # ← 추가
+                        end=end_date,       # ← 추가
                     )
                 st.session_state["bt_result"] = df_bt
                 progress_bar.progress(100)
