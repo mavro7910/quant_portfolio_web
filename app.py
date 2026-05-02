@@ -259,7 +259,7 @@ with tab1:
 
     with col_btn1:
         st.write("")  # 버튼 수직 정렬
-        if st.button("➕ 추가/수정", use_container_width=True):
+        if st.button("➕ 추가/수정", width='stretch'):
             if new_ticker:
                 portfolio.set_holding(new_ticker, new_shares)
                 portfolio.save()
@@ -277,7 +277,7 @@ with tab1:
             ["선택..."] + tickers_list,
             key="del_select",
         )
-        if st.button("🗑️ 삭제", use_container_width=True):
+        if st.button("🗑️ 삭제", width='stretch'):
             if del_ticker != "선택...":
                 portfolio.remove_holding(del_ticker)
                 portfolio.save()
@@ -362,7 +362,7 @@ with tab1:
             )
             st.write("")
 
-        st.dataframe(df_hold, use_container_width=True, hide_index=True)
+        st.dataframe(df_hold, width="stretch", hide_index=True)
 
 # ══════════════════════════════════════════════
 # 탭 2 : 매수 추천
@@ -391,7 +391,7 @@ with tab2:
 
     with col_run:
         st.write("")
-        run_buy = st.button("▶ 매수 추천 실행", use_container_width=True, key="btn_buy")
+        run_buy = st.button("▶ 매수 추천 실행", width='stretch', key="btn_buy")
 
     if run_buy:
         if not portfolio.tickers():
@@ -472,7 +472,7 @@ with tab2:
                 "매수 수량": f"{shr_val:.4f}",
             })
 
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
         # 총 매수금액 -- dict/Series 모두 안전하게 합산
         total_buy = safe_sum(buy_krw)
@@ -505,7 +505,7 @@ with tab2:
             height=320,
             showlegend=False,
         )
-        st.plotly_chart(fig_pie, use_container_width=True)
+        st.plotly_chart(fig_pie, use_container_width=True, key="pie_chart")
 
 # ══════════════════════════════════════════════
 # 탭 3 : 백테스트
@@ -536,7 +536,7 @@ with tab3:
 
     with col_run2:
         st.write("")
-        run_bt = st.button("▶ 백테스트 실행", use_container_width=True, key="btn_bt")
+        run_bt = st.button("▶ 백테스트 실행", width='stretch', key="btn_bt")
 
     st.caption(f"📌 주간 투자금: ₩{portfolio.weekly_budget:,} | 보유 종목: {len(portfolio.holdings)}개")
 
@@ -624,7 +624,7 @@ with tab3:
             xaxis=dict(gridcolor="#2a3a5c"),
             yaxis_gridcolor="#2a3a5c",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="bt_chart")
 
         # 요약 테이블
         st.markdown('<div class="section-label">성과 요약</div>', unsafe_allow_html=True)
@@ -659,7 +659,7 @@ with tab3:
             "MDD": "–",
         })
 
-        st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(summary_rows), width="stretch", hide_index=True)
         st.caption(f"기간: {df_bt.index[0].date()} ~ {df_bt.index[-1].date()}")
 
 # ══════════════════════════════════════════════
@@ -690,7 +690,7 @@ with tab4:
     st.markdown('<div class="section-label">저장 위치</div>', unsafe_allow_html=True)
     st.code(str(portfolio.path.resolve()), language=None)
 
-    if st.button("💾 설정 저장", use_container_width=False):
+    if st.button("💾 설정 저장", width='content'):
         portfolio.weekly_budget = new_budget
         bms = [b.strip().upper() for b in new_bm.split(",") if b.strip()]
         if not bms:
@@ -715,17 +715,26 @@ with tab4:
     st.markdown('<div class="section-label">포트폴리오 JSON 불러오기</div>', unsafe_allow_html=True)
 
     uploaded = st.file_uploader("portfolio.json 업로드", type=["json"])
-    if uploaded:
+    if uploaded is not None:
         try:
-            data = json.load(uploaded)
-            if "holdings" in data:
-                portfolio._data = data
-                portfolio.save()
-                # 불러오기 후 캐시 무효화
-                invalidate_cache("prices_data", "buy_result", "bt_result")
-                st.success("✅ 포트폴리오를 불러왔습니다!")
-                st.rerun()
+            raw_bytes = uploaded.read()
+            if not raw_bytes:
+                st.error("업로드된 파일이 비어 있습니다.")
             else:
-                st.error("올바른 portfolio.json 형식이 아닙니다.")
+                data = json.loads(raw_bytes.decode("utf-8"))
+                if not isinstance(data, dict):
+                    st.error("올바른 JSON 형식이 아닙니다 (object 타입이어야 합니다).")
+                elif "holdings" not in data:
+                    st.error("올바른 portfolio.json 형식이 아닙니다. holdings 키가 없습니다.")
+                else:
+                    portfolio._data = data
+                    portfolio.save()
+                    invalidate_cache("prices_data", "buy_result", "bt_result")
+                    st.success("✅ 포트폴리오를 불러왔습니다!")
+                    st.rerun()
+        except json.JSONDecodeError as e:
+            st.error(f"JSON 파싱 오류: {e}")
+        except UnicodeDecodeError:
+            st.error("파일 인코딩 오류: UTF-8 형식의 JSON 파일을 업로드하세요.")
         except Exception as e:
             st.error(f"파일 읽기 오류: {e}")
