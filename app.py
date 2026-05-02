@@ -1,10 +1,11 @@
 """
-app.py  — UI 정렬 수정판
-주요 변경사항:
-  - 버튼 컬럼 하단 정렬 CSS 강화 (label 높이 보정)
-  - 체크박스 컬럼 중앙 정렬
-  - selectbox 컬럼 하단 정렬
-  - 모든 컬럼 높이 통일 (align-items: flex-end)
+app.py — 개선판
+
+[수정 사항]
+1. 성과 요약: CAGR → XIRR (적립식 내부수익률)로 교체
+2. 백테스트 탭에 서바이버십 바이어스 경고 문구 추가
+3. 시총 가중 체크박스에 look-ahead 관련 안내 추가
+4. 나머지 UI/로직은 기존 유지
 """
 
 import json
@@ -21,7 +22,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.portfolio import Portfolio
 from core.data import fetch_prices_and_fx
-from core.strategy import buy_recommendation, run_backtest, BENCHMARKS
+from core.strategy import (
+    buy_recommendation,
+    run_backtest,
+    calc_xirr_from_backtest,
+    BENCHMARKS,
+)
 
 # ─────────────────────────────────────────────
 # 유틸 함수
@@ -37,6 +43,7 @@ def safe_sum(obj) -> float:
     except Exception:
         return 0.0
 
+
 def safe_get(obj, key, default=0.0):
     try:
         if isinstance(obj, pd.Series):
@@ -47,10 +54,18 @@ def safe_get(obj, key, default=0.0):
     except Exception:
         return default
 
+
 def invalidate_cache(*keys):
     for k in keys:
         if k in st.session_state:
             del st.session_state[k]
+
+
+def fmt_xirr(v: float) -> str:
+    if np.isnan(v):
+        return "계산불가"
+    return f"{v * 100:+.1f}%"
+
 
 # ─────────────────────────────────────────────
 # 페이지 설정
@@ -64,15 +79,13 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# CSS 스타일  ★ 정렬 수정 핵심 영역 ★
+# CSS
 # ─────────────────────────────────────────────
 
 st.markdown("""
 <style>
-/* ── 전체 배경 ── */
 .stApp { background-color: #0f1117; color: #e0e0e0; }
 
-/* ── 메인 헤더 ── */
 .main-header {
     background: linear-gradient(135deg, #1a1f2e 0%, #16213e 100%);
     border: 1px solid #2a3a5c;
@@ -90,13 +103,8 @@ st.markdown("""
     color: #e8eaf6;
     letter-spacing: -0.5px;
 }
-.main-header p {
-    margin: 4px 0 0 0;
-    font-size: 0.85rem;
-    color: #7986cb;
-}
+.main-header p { margin: 4px 0 0 0; font-size: 0.85rem; color: #7986cb; }
 
-/* ── 카드 ── */
 .metric-card {
     background: #1a1f2e;
     border: 1px solid #2a3a5c;
@@ -107,7 +115,6 @@ st.markdown("""
 .metric-card .label { font-size: 0.78rem; color: #90caf9; margin-bottom: 6px; }
 .metric-card .value { font-size: 1.4rem; font-weight: 700; color: #e8eaf6; }
 
-/* ── 경고/성공 배너 ── */
 .warn-banner {
     background: #2a1f0e;
     border: 1px solid #e67e22;
@@ -126,8 +133,17 @@ st.markdown("""
     font-size: 0.85rem;
     margin: 8px 0;
 }
+.info-banner {
+    background: #0e1a2a;
+    border: 1px solid #1e88e5;
+    border-radius: 8px;
+    padding: 10px 16px;
+    color: #90caf9;
+    font-size: 0.82rem;
+    margin: 8px 0;
+    line-height: 1.6;
+}
 
-/* ── 섹션 헤더 ── */
 .section-label {
     font-size: 0.78rem;
     font-weight: 600;
@@ -137,184 +153,79 @@ st.markdown("""
     margin: 20px 0 8px 0;
 }
 
-/* ── 탭 스타일 ── */
 .stTabs [data-baseweb="tab-list"] {
-    background: #1a1f2e;
-    border-radius: 10px;
-    padding: 4px;
-    gap: 4px;
+    background: #1a1f2e; border-radius: 10px; padding: 4px; gap: 4px;
 }
-.stTabs [data-baseweb="tab"] {
-    border-radius: 8px;
-    color: #90caf9;
-    font-weight: 600;
-}
-.stTabs [aria-selected="true"] {
-    background: #283593 !important;
-    color: #e8eaf6 !important;
-}
+.stTabs [data-baseweb="tab"] { border-radius: 8px; color: #90caf9; font-weight: 600; }
+.stTabs [aria-selected="true"] { background: #283593 !important; color: #e8eaf6 !important; }
 
-/* ── 버튼 ── */
 .stButton > button {
     background: linear-gradient(135deg, #283593, #1a237e);
     color: #ffffff !important;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    padding: 8px 20px;
-    transition: all 0.2s;
-    width: 100%;
+    border: none; border-radius: 8px; font-weight: 600;
+    padding: 8px 20px; transition: all 0.2s; width: 100%;
 }
 .stButton > button:hover {
     background: linear-gradient(135deg, #3949ab, #283593);
     transform: translateY(-1px);
 }
 
-/* ══════════════════════════════════════════
-   ★ 핵심 정렬 수정 ★
-   
-   Streamlit 컬럼 내부 구조:
-   div[data-testid="column"]
-     └─ div (gap wrapper)
-          └─ div.stVerticalBlock
-               └─ div.stElementContainer
-                    └─ 실제 위젯
-   
-   모든 컬럼을 flex column으로 만들고
-   버튼/삭제 컬럼은 하단 정렬,
-   체크박스 컬럼은 중앙 정렬
-══════════════════════════════════════════ */
-
-/* 모든 컬럼 기본: flex column */
-div[data-testid="column"] {
-    display: flex !important;
-    flex-direction: column !important;
-}
-
-/* 버튼을 포함하는 컬럼 → 하단 정렬
-   (label 높이만큼 버튼이 내려가야 입력 필드와 맞음) */
-div[data-testid="column"]:has(.stButton) {
-    justify-content: flex-end !important;
-}
-
-/* 체크박스를 포함하는 컬럼 → 중앙 정렬 */
-div[data-testid="column"]:has(.stCheckbox) {
-    justify-content: center !important;
-}
-
-/* selectbox 컬럼은 하단 정렬 (삭제 버튼과 함께) */
-div[data-testid="column"]:has(.stSelectbox) {
-    justify-content: flex-end !important;
-}
-
-/* 컬럼 내부 vertical block 높이를 100%로 */
+div[data-testid="column"] { display: flex !important; flex-direction: column !important; }
+div[data-testid="column"]:has(.stButton)   { justify-content: flex-end !important; }
+div[data-testid="column"]:has(.stCheckbox) { justify-content: center !important; }
+div[data-testid="column"]:has(.stSelectbox){ justify-content: flex-end !important; }
 div[data-testid="column"] > div {
-    height: 100% !important;
-    display: flex !important;
-    flex-direction: column !important;
+    height: 100% !important; display: flex !important; flex-direction: column !important;
 }
-
 div[data-testid="column"] > div > div[data-testid="stVerticalBlock"] {
-    height: 100% !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: inherit !important;
+    height: 100% !important; display: flex !important;
+    flex-direction: column !important; justify-content: inherit !important;
 }
+div[data-testid="column"]:has(.stButton) .stButton  { margin-bottom: 0 !important; }
+div[data-testid="column"]:has(.stCheckbox) .stCheckbox { padding: 0 !important; margin: 0 !important; }
 
-/* 버튼 컬럼의 하단 margin 보정 (입력 필드 하단 여백과 맞춤) */
-div[data-testid="column"]:has(.stButton) .stButton {
-    margin-bottom: 0 !important;
-}
-
-/* 체크박스 상하 패딩 조정 */
-div[data-testid="column"]:has(.stCheckbox) .stCheckbox {
-    padding: 0 !important;
-    margin: 0 !important;
-}
-
-/* ══════════════════════════════════════════ */
-
-/* ── 텍스트 입력 / 숫자 입력 가시성 ── */
-.stTextInput input,
-.stNumberInput input {
-    background-color: #1e2535 !important;
-    color: #e8eaf6 !important;
-    border: 1px solid #3a4a6c !important;
-    border-radius: 6px !important;
+.stTextInput input, .stNumberInput input {
+    background-color: #1e2535 !important; color: #e8eaf6 !important;
+    border: 1px solid #3a4a6c !important; border-radius: 6px !important;
     caret-color: #90caf9 !important;
 }
-.stTextInput input::placeholder,
-.stNumberInput input::placeholder {
-    color: #5c6f99 !important;
-}
-.stTextInput input:focus,
-.stNumberInput input:focus {
+.stTextInput input::placeholder, .stNumberInput input::placeholder { color: #5c6f99 !important; }
+.stTextInput input:focus, .stNumberInput input:focus {
     border-color: #5c7cfa !important;
     box-shadow: 0 0 0 2px rgba(92,124,250,0.2) !important;
 }
 
-/* ── selectbox 가시성 ── */
 .stSelectbox > div > div {
-    background-color: #1e2535 !important;
-    color: #e8eaf6 !important;
-    border: 1px solid #3a4a6c !important;
-    border-radius: 6px !important;
+    background-color: #1e2535 !important; color: #e8eaf6 !important;
+    border: 1px solid #3a4a6c !important; border-radius: 6px !important;
 }
 .stSelectbox svg { fill: #90caf9 !important; }
 
-/* ── 위젯 라벨 색상 ── */
-.stTextInput label,
-.stNumberInput label,
-.stSelectbox label,
-.stCheckbox label,
-.stFileUploader label {
-    color: #b0bec5 !important;
-    font-size: 0.85rem !important;
+.stTextInput label, .stNumberInput label, .stSelectbox label,
+.stCheckbox label, .stFileUploader label {
+    color: #b0bec5 !important; font-size: 0.85rem !important;
 }
+.stCheckbox > label > div { color: #b0bec5 !important; }
+.stCaption, div[data-testid="stCaptionContainer"] { color: #7986cb !important; }
 
-/* ── 체크박스 텍스트 ── */
-.stCheckbox > label > div {
-    color: #b0bec5 !important;
-}
+[data-testid="stDataFrame"] th { background-color: #1a2340 !important; color: #90caf9 !important; }
+[data-testid="stDataFrame"] td { color: #d0d8f0 !important; }
+.stCode code { color: #90caf9 !important; background: #1a1f2e !important; }
 
-/* ── caption 가시성 ── */
-.stCaption, div[data-testid="stCaptionContainer"] {
-    color: #7986cb !important;
-}
-
-/* ── 데이터프레임 헤더/셀 가시성 ── */
-[data-testid="stDataFrame"] th {
-    background-color: #1a2340 !important;
-    color: #90caf9 !important;
-}
-[data-testid="stDataFrame"] td {
-    color: #d0d8f0 !important;
-}
-
-/* ── 코드 블록 ── */
-.stCode code {
-    color: #90caf9 !important;
-    background: #1a1f2e !important;
-}
-
-/* ── 다운로드 버튼 ── */
 .stDownloadButton > button {
     background: linear-gradient(135deg, #1b5e20, #2e7d32) !important;
-    color: #ffffff !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
+    color: #ffffff !important; border: none !important;
+    border-radius: 8px !important; font-weight: 600 !important;
 }
 
-/* ── 숨기기 ── */
 #MainMenu { visibility: hidden; }
-footer { visibility: hidden; }
-header { visibility: hidden; }
+footer    { visibility: hidden; }
+header    { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# 포트폴리오 세션 초기화
+# 세션 초기화
 # ─────────────────────────────────────────────
 
 if "portfolio" not in st.session_state:
@@ -337,14 +248,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# 탭 구성
+# 탭
 # ─────────────────────────────────────────────
 
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📋 포트폴리오",
-    "🧮 매수 추천",
-    "📈 백테스트",
-    "⚙️ 설정",
+    "📋 포트폴리오", "🧮 매수 추천", "📈 백테스트", "⚙️ 설정",
 ])
 
 # ══════════════════════════════════════════════
@@ -354,29 +262,15 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.markdown('<div class="section-label">보유 종목 관리</div>', unsafe_allow_html=True)
 
-    # ★ 컬럼 비율 조정: 버튼 컬럼에 여유 공간 확보
     col_t, col_s, col_btn1 = st.columns([2.5, 2.5, 1.5])
-
     with col_t:
-        new_ticker = st.text_input(
-            "티커 입력",
-            placeholder="AAPL",
-            key="inp_ticker",
-        ).upper().strip()
-
+        new_ticker = st.text_input("티커 입력", placeholder="AAPL", key="inp_ticker").upper().strip()
     with col_s:
         new_shares = st.number_input(
-            "보유 수량",
-            min_value=0.0,
-            max_value=9_999_999.0,
-            value=0.0,
-            step=0.000001,
-            format="%.6f",
-            key="inp_shares",
+            "보유 수량", min_value=0.0, max_value=9_999_999.0,
+            value=0.0, step=0.000001, format="%.6f", key="inp_shares",
         )
-
     with col_btn1:
-        # label 높이와 맞추기 위한 투명 라벨
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         if st.button("➕ 추가/수정", key="btn_add"):
             if new_ticker:
@@ -388,17 +282,10 @@ with tab1:
             else:
                 st.error("티커를 입력하세요.")
 
-    # 삭제는 별도 행으로 분리 → 정렬 문제 원천 차단
     tickers_list = portfolio.tickers()
     col_del_s, col_del_btn = st.columns([4, 1.5])
-
     with col_del_s:
-        del_ticker = st.selectbox(
-            "삭제할 종목 선택",
-            ["선택..."] + tickers_list,
-            key="del_select",
-        )
-
+        del_ticker = st.selectbox("삭제할 종목 선택", ["선택..."] + tickers_list, key="del_select")
     with col_del_btn:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         if st.button("🗑️ 삭제", key="btn_del"):
@@ -434,13 +321,12 @@ with tab1:
 
             if fx_est:
                 st.markdown(
-                    '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 -- 추정값 사용 중</div>',
+                    '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 — 추정값 사용 중</div>',
                     unsafe_allow_html=True,
                 )
 
             rows = []
             total_krw = 0.0
-
             for t, s in holdings.items():
                 try:
                     p = float(prices[t])
@@ -455,13 +341,9 @@ with tab1:
                     val_str = f"₩{val:,.0f}"
                 else:
                     val_str = "N/A"
-
                 rows.append((t, f"{s:.6f}", price_str, val_str))
 
-            df_hold = pd.DataFrame(
-                rows,
-                columns=["티커", "보유 수량", "현재가 (USD)", "평가금액 (KRW)"],
-            )
+            df_hold = pd.DataFrame(rows, columns=["티커", "보유 수량", "현재가 (USD)", "평가금액 (KRW)"])
 
             c1, c2, c3 = st.columns(3)
             c1.markdown(
@@ -491,29 +373,21 @@ with tab2:
     st.markdown('<div class="section-label">투자 설정</div>', unsafe_allow_html=True)
 
     col_b, col_m, col_run = st.columns([2.5, 2, 1.5])
-
     with col_b:
         budget = st.number_input(
-            "투자 금액 (KRW)",
-            min_value=10_000,
-            max_value=100_000_000,
-            value=portfolio.weekly_budget,
-            step=10_000,
+            "투자 금액 (KRW)", min_value=10_000, max_value=100_000_000,
+            value=portfolio.weekly_budget, step=10_000,
         )
-
     with col_m:
-        # 체크박스를 입력 필드 하단에 정렬
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         use_mcap = st.checkbox(
-            "시가총액 가중 사용",
-            value=True,
-            help="체크 시 실시간 시가총액 조회 (속도 느림)",
+            "시가총액 가중 사용", value=True,
+            help="현재 시점 시총 기준으로 비중 조정. 매수추천에만 적용.",
         )
-
     with col_run:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_buy = st.button("▶ 매수 추천 실행", key="btn_buy")
-    
+
     n_tickers = st.number_input(
         "추천 종목 수",
         min_value=1,
@@ -535,7 +409,7 @@ with tab2:
                         holdings=portfolio.holdings,
                         budget_krw=budget,
                         use_market_cap=use_mcap,
-                        top_n=n_tickers,  # ← 추가
+                        top_n=int(n_tickers),
                     )
                     st.session_state["buy_result"] = res
                 except Exception as e:
@@ -557,7 +431,7 @@ with tab2:
 
         if fx_est:
             st.markdown(
-                '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 -- 추정값 사용</div>',
+                '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 — 추정값 사용</div>',
                 unsafe_allow_html=True,
             )
 
@@ -589,18 +463,13 @@ with tab2:
             except (KeyError, TypeError, ValueError):
                 price_str = "N/A"
 
-            krw_val = safe_get(buy_krw, t)
-            usd_val = safe_get(buy_usd, t)
-            shr_val = safe_get(buy_shares, t)
-            wgt_val = safe_get(weights, t)
-
             rows.append({
-                "티커": t,
-                "목표 비중": f"{wgt_val:.1%}",
-                "현재가 (USD)": price_str,
-                "매수금액 (KRW)": f"₩{krw_val:,.0f}",
-                "매수금액 (USD)": f"${usd_val:,.2f}",
-                "매수 수량": f"{shr_val:.4f}",
+                "티커":          t,
+                "목표 비중":     f"{safe_get(weights, t):.1%}",
+                "현재가 (USD)":  price_str,
+                "매수금액 (KRW)": f"₩{safe_get(buy_krw, t):,.0f}",
+                "매수금액 (USD)": f"${safe_get(buy_usd, t):,.2f}",
+                "매수 수량":     f"{safe_get(buy_shares, t):.4f}",
             })
 
         st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
@@ -614,43 +483,24 @@ with tab2:
         pie_labels = tickers_r
         pie_values = [safe_get(weights, t) for t in tickers_r]
 
-
         fig_pie = go.Figure(go.Pie(
-            labels=pie_labels,
-            values=pie_values,
-            hole=0.45,
-            textinfo="percent",           # 파이 안에는 퍼센트만
-            texttemplate="%{percent:.1%}",
-            textposition="inside",
-            insidetextorientation="radial",
+            labels=pie_labels, values=pie_values, hole=0.45,
+            textinfo="percent", texttemplate="%{percent:.1%}",
+            textposition="inside", insidetextorientation="radial",
             marker=dict(colors=[
-                "#3949ab", "#1e88e5", "#00acc1", "#43a047",
-                "#fb8c00", "#e53935", "#8e24aa", "#00897b",
-                "#f4511e", "#6d4c41"
+                "#3949ab","#1e88e5","#00acc1","#43a047",
+                "#fb8c00","#e53935","#8e24aa","#00897b","#f4511e","#6d4c41",
             ]),
         ))
-
         n = len(pie_labels)
         fig_pie.update_layout(
-            title="목표 비중",
-            paper_bgcolor="#1a1f2e",
-            plot_bgcolor="#1a1f2e",
-            font_color="#e0e0e0",
-            margin=dict(t=40, b=10, l=10, r=10),
-            height=320 + n * 20,          # 범례 공간 확보
-            showlegend=True,               # 범례 ON
-            legend=dict(
-                orientation="v",
-                x=1.02,
-                y=0.5,
-                font=dict(color="#e0e0e0", size=11),
-                bgcolor="rgba(0,0,0,0)",
-            ),
+            title="목표 비중", paper_bgcolor="#1a1f2e", plot_bgcolor="#1a1f2e",
+            font_color="#e0e0e0", margin=dict(t=40, b=10, l=10, r=10),
+            height=320 + n * 20, showlegend=True,
+            legend=dict(orientation="v", x=1.02, y=0.5,
+                        font=dict(color="#e0e0e0", size=11), bgcolor="rgba(0,0,0,0)"),
         )
-
         st.plotly_chart(fig_pie, width="stretch", key="pie_chart")
-
-        
 
 # ══════════════════════════════════════════════
 # 탭 3 : 백테스트
@@ -659,28 +509,32 @@ with tab2:
 with tab3:
     st.markdown('<div class="section-label">백테스트 설정</div>', unsafe_allow_html=True)
 
-    col_p, col_m2, col_bm, col_run2 = st.columns([1.5, 1.5, 2.5, 1.5])
+    # ── 백테스트 신뢰도 안내 ──────────────────────────────────────
+    st.markdown("""
+<div class="info-banner">
+⚠️ <b>백테스트 해석 주의사항</b><br>
+① <b>생존 편향</b>: 현재 보유 중인 종목(살아남은 종목)으로만 과거를 시뮬레이션하므로 실제보다 성과가 과대평가될 수 있습니다.<br>
+② <b>시가총액 근사</b>: 과거 시총은 <i>현재 발행주수 × 과거 주가</i>로 근사합니다. 자사주 매입·유상증자 등으로 인한 오차가 일부 존재합니다.<br>
+③ <b>수익률 지표</b>: CAGR 대신 <b>XIRR(내부수익률)</b>을 사용합니다. 매주 나누어 투자하는 적립식 구조를 정확히 반영한 연수익률입니다.
+</div>
+""", unsafe_allow_html=True)
 
+    col_p, col_m2, col_bm, col_run2 = st.columns([1.5, 1.5, 2.5, 1.5])
     with col_p:
         period_label = st.selectbox("기간", ["2년", "3년", "5년"], index=1)
-        period_map = {"2년": "2y", "3년": "3y", "5년": "5y"}
-        period_str = period_map[period_label]
-
+        period_map   = {"2년": "2y", "3년": "3y", "5년": "5y"}
+        period_str   = period_map[period_label]
     with col_m2:
-        # 체크박스를 selectbox 하단에 맞춤
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         use_mcap_bt = st.checkbox(
-            "시총 가중 반영",
-            value=True,
-            help="리밸런싱 시점에 시가총액 비중 사용",
+            "시총 가중 반영", value=True,
+            help="발행주수 × 해당 시점 주가로 시총을 근사합니다 (look-ahead bias 최소화).",
         )
-
     with col_bm:
         bm_input = st.text_input(
             "벤치마크 티커 (쉼표 구분)",
             value=", ".join(portfolio.benchmarks),
         )
-
     with col_run2:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_bt = st.button("▶ 백테스트 실행", key="btn_bt")
@@ -696,7 +550,7 @@ with tab3:
             portfolio.save()
 
             progress_bar = st.progress(0)
-            status_text = st.empty()
+            status_text  = st.empty()
 
             def progress_cb(cur, total):
                 pct = int(cur / total * 100) if total > 0 else 0
@@ -712,7 +566,7 @@ with tab3:
                         period=period_str,
                         use_market_cap=use_mcap_bt,
                         progress_cb=progress_cb,
-                        top_n=n_tickers,  # ← 추가
+                        top_n=int(n_tickers),
                     )
                 st.session_state["bt_result"] = df_bt
                 progress_bar.progress(100)
@@ -726,110 +580,92 @@ with tab3:
         df_bt = st.session_state["bt_result"]
 
         fig = go.Figure()
-
         fig.add_trace(go.Scatter(
-            x=df_bt.index,
-            y=df_bt["Invested"],
-            name="누적 투자금",
-            fill="tozeroy",
-            fillcolor="rgba(200,200,200,0.08)",
+            x=df_bt.index, y=df_bt["Invested"], name="누적 투자금",
+            fill="tozeroy", fillcolor="rgba(200,200,200,0.08)",
             line=dict(color="#cccccc", width=1, dash="dot"),
         ))
-
         fig.add_trace(go.Scatter(
-            x=df_bt.index,
-            y=df_bt["KH_Strategy"],
-            name="KH 전략",
+            x=df_bt.index, y=df_bt["KH_Strategy"], name="KH 전략",
             line=dict(color="#7dd3fc", width=3),
         ))
 
         bm_colors = ["#f87171", "#4ade80", "#fbbf24", "#c084fc", "#34d399"]
-        bm_cols = [c for c in df_bt.columns if c not in ("KH_Strategy", "Invested")]
-
+        bm_cols   = [c for c in df_bt.columns if c not in ("KH_Strategy", "Invested")]
         for i, col in enumerate(bm_cols):
             fig.add_trace(go.Scatter(
-                x=df_bt.index,
-                y=df_bt[col],
+                x=df_bt.index, y=df_bt[col],
                 name=BENCHMARKS.get(col, col),
                 line=dict(color=bm_colors[i % len(bm_colors)], width=2, dash="dash"),
             ))
 
         fig.update_layout(
             title=dict(text="포트폴리오 성과 비교", font=dict(color="#f1f5f9", size=15)),
-            # Y축 타이틀 제거 → tick suffix로 대체 (모바일 좌측 여백 절약)
-            xaxis_title=None,
-            yaxis_title=None,
-            paper_bgcolor="#0f1117",
-            plot_bgcolor="#1a1f2e",
+            xaxis_title=None, yaxis_title=None,
+            paper_bgcolor="#0f1117", plot_bgcolor="#1a1f2e",
             font=dict(color="#f1f5f9", size=11),
-            # ★ legend 그래프 하단 배치 (모바일 핵심 수정)
             legend=dict(
-                orientation="h",          # 가로 나열
-                yanchor="top",
-                y=-0.18,                  # 그래프 아래로
-                xanchor="center",
-                x=0.5,
-                bgcolor="rgba(15,17,23,0.85)",
-                bordercolor="#4a5568",
-                borderwidth=1,
-                font=dict(color="#f1f5f9", size=11),
-                itemwidth=40,             # 아이콘 너비 최소화
+                orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5,
+                bgcolor="rgba(15,17,23,0.85)", bordercolor="#4a5568", borderwidth=1,
+                font=dict(color="#f1f5f9", size=11), itemwidth=40,
             ),
             hovermode="x unified",
             hoverlabel=dict(bgcolor="#1e293b", font_color="#f1f5f9", font_size=11),
-            # 우측 여백 줄이고, 하단은 legend 공간 확보
             margin=dict(t=50, b=110, l=55, r=10),
             height=520,
             yaxis=dict(
-                tickformat=",.0f",
-                gridcolor="#2d3748",
+                tickformat=",.0f", gridcolor="#2d3748",
                 tickfont=dict(color="#cbd5e1", size=10),
-                # 큰 숫자 압축: 억 단위 suffix
-                tickprefix="₩",
-                ticksuffix="",
-                exponentformat="none",
+                tickprefix="₩", exponentformat="none",
             ),
             xaxis=dict(
                 gridcolor="#2d3748",
                 tickfont=dict(color="#cbd5e1", size=10),
-                tickangle=-30,            # 날짜 라벨 기울여서 겹침 방지
+                tickangle=-30,
             ),
         )
         st.plotly_chart(fig, width="stretch", key="bt_chart")
 
-        st.markdown('<div class="section-label">성과 요약</div>', unsafe_allow_html=True)
+        # ── 성과 요약 (XIRR 기반) ────────────────────────────────
+        st.markdown('<div class="section-label">성과 요약 (XIRR 기준)</div>', unsafe_allow_html=True)
 
         invested = df_bt["Invested"].iloc[-1]
-        years = (df_bt.index[-1] - df_bt.index[0]).days / 365.25
-
         summary_rows = []
         all_cols = ["KH_Strategy"] + bm_cols
 
         for col in all_cols:
-            final = df_bt[col].iloc[-1]
+            final   = df_bt[col].iloc[-1]
             ret_pct = (final / invested - 1) * 100 if invested > 0 else 0.0
-            cagr = ((final / invested) ** (1 / max(years, 0.01)) - 1) * 100 if invested > 0 else 0.0
+
+            # XIRR 계산
+            xirr_val = calc_xirr_from_backtest(
+                df_bt, portfolio.weekly_budget, col=col
+            )
+
             running_max = df_bt[col].cummax()
             mdd = ((running_max - df_bt[col]) / running_max.replace(0, np.nan)).max() * 100
 
             summary_rows.append({
-                "전략/벤치마크": "✅ KH 전략" if col == "KH_Strategy" else col,
-                "최종 평가금액": f"₩{final / 1_000_000:.2f}M",
-                "누적 수익률": f"{ret_pct:+.1f}%",
-                "CAGR": f"{cagr:+.1f}%",
-                "MDD": f"{mdd:.1f}%",
+                "전략/벤치마크":  "✅ KH 전략" if col == "KH_Strategy" else col,
+                "최종 평가금액":  f"₩{final / 1_000_000:.2f}M",
+                "누적 수익률":    f"{ret_pct:+.1f}%",
+                "XIRR (연수익률)": fmt_xirr(xirr_val),
+                "MDD":            f"{mdd:.1f}%",
             })
 
         summary_rows.append({
-            "전략/벤치마크": "📌 누적 투자금",
-            "최종 평가금액": f"₩{invested / 1_000_000:.2f}M",
-            "누적 수익률": "–",
-            "CAGR": "–",
-            "MDD": "–",
+            "전략/벤치마크":  "📌 누적 투자금",
+            "최종 평가금액":  f"₩{invested / 1_000_000:.2f}M",
+            "누적 수익률":    "–",
+            "XIRR (연수익률)": "–",
+            "MDD":            "–",
         })
 
         st.dataframe(pd.DataFrame(summary_rows), width="stretch", hide_index=True)
-        st.caption(f"기간: {df_bt.index[0].date()} ~ {df_bt.index[-1].date()}")
+        st.caption(
+            f"기간: {df_bt.index[0].date()} ~ {df_bt.index[-1].date()} | "
+            "XIRR = 각 투자 시점을 반영한 실질 연수익률 (적립식 표준 지표)"
+        )
 
 # ══════════════════════════════════════════════
 # 탭 4 : 설정
@@ -839,16 +675,11 @@ with tab4:
     st.markdown('<div class="section-label">투자 설정</div>', unsafe_allow_html=True)
 
     col_s1, col_s2 = st.columns(2)
-
     with col_s1:
         new_budget = st.number_input(
-            "주간 투자 금액 (KRW)",
-            min_value=10_000,
-            max_value=100_000_000,
-            value=portfolio.weekly_budget,
-            step=10_000,
+            "주간 투자 금액 (KRW)", min_value=10_000, max_value=100_000_000,
+            value=portfolio.weekly_budget, step=10_000,
         )
-
     with col_s2:
         new_bm = st.text_input(
             "벤치마크 티커 (쉼표 구분)",
@@ -870,22 +701,16 @@ with tab4:
             st.success("✅ 설정이 저장되었습니다!")
 
     st.markdown('<div class="section-label">포트폴리오 JSON 내보내기</div>', unsafe_allow_html=True)
-
     if portfolio.path.exists():
         with open(portfolio.path, encoding="utf-8") as f:
             json_str = f.read()
         st.download_button(
             "⬇️ portfolio.json 다운로드",
-            data=json_str,
-            file_name="portfolio.json",
-            mime="application/json",
+            data=json_str, file_name="portfolio.json", mime="application/json",
         )
 
     st.markdown('<div class="section-label">포트폴리오 JSON 불러오기</div>', unsafe_allow_html=True)
-
-    uploaded = st.file_uploader("portfolio.json 업로드", type=["json"],
-                                key="json_uploader")
-
+    uploaded     = st.file_uploader("portfolio.json 업로드", type=["json"], key="json_uploader")
     last_uploaded = st.session_state.get("_last_uploaded_name")
 
     if uploaded is not None and uploaded.name != last_uploaded:
