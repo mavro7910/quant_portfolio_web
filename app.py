@@ -1,17 +1,17 @@
 """
-app.py -- 개선판
+app.py -- Google Auth 적용판
 
 [수정 사항]
-1. 성과 요약: CAGR → XIRR (적립식 내부수익률)로 교체
-2. 백테스트 탭에 서바이버십 바이어스 경고 문구 추가
-3. 시총 가중 체크박스에 look-ahead 관련 안내 추가
-4. JSON 내보내기 버그 수정: 파일 존재 여부 무관하게 메모리 상태 직렬화
-5. 나머지 UI/로직은 기존 유지
+- UUID/URL 파라미터 기반 사용자 구분 → Streamlit 공식 Google OAuth (st.user) 로 교체
+- 데이터 저장 경로: portfolio_{uid}.json → portfolio_{email_hash}.json (이메일 기반 고정)
+- 로그인/로그아웃 버튼 헤더에 추가
+- 나머지 UI/로직은 기존 유지
 """
 
 import json
 import sys
 import os
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -68,6 +68,11 @@ def fmt_xirr(v: float) -> str:
     if np.isnan(v):
         return "계산불가"
     return f"{v * 100:+.1f}%"
+
+
+def email_to_filename(email: str) -> str:
+    """이메일을 파일명에 안전한 해시로 변환"""
+    return hashlib.sha256(email.lower().encode()).hexdigest()[:16]
 
 
 # ─────────────────────────────────────────────
@@ -230,38 +235,82 @@ header    { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
-import uuid
- 
-# ─────────────────────────────────────────────
-# UUID 기반 사용자 구분 (JS 없이 순수 Python)
-# ─────────────────────────────────────────────
- 
-if "uid" not in st.query_params:
-    st.query_params["uid"] = str(uuid.uuid4())
- 
-_uid = st.query_params["uid"]
- 
-if "portfolio" not in st.session_state or st.session_state.get("_uid") != _uid:
-    data_path = Path(__file__).parent / "data" / f"portfolio_{_uid}.json"
-    st.session_state.portfolio = Portfolio(path=data_path)
-    st.session_state["_uid"] = _uid
- 
-portfolio: Portfolio = st.session_state.portfolio
- 
 
 # ─────────────────────────────────────────────
-# 헤더
+# 🔐 Google 로그인 게이트
 # ─────────────────────────────────────────────
 
-st.markdown("""
-<div class="main-header">
-    <div style="font-size:2.2rem">📊</div>
-    <div>
-        <h1>Quant Portfolio Manager</h1>
-        <p>팩터 가중 모멘텀 전략 · 백테스트 · 매수 추천</p>
+if not st.user.is_logged_in:
+    st.markdown("""
+    <div class="main-header">
+        <div style="font-size:2.2rem">📊</div>
+        <div>
+            <h1>Quant Portfolio Manager</h1>
+            <p>팩터 가중 모멘텀 전략 · 백테스트 · 매수 추천</p>
+        </div>
     </div>
-</div>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="info-banner">
+        🔐 <b>로그인이 필요합니다</b><br>
+        Google 계정으로 로그인하면 어떤 기기에서든 동일한 포트폴리오 데이터를 사용할 수 있습니다.
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_login, col_empty = st.columns([1, 3])
+    with col_login:
+        if st.button("🔑 Google로 로그인", key="btn_login"):
+            st.login()
+    st.stop()
+
+
+# ─────────────────────────────────────────────
+# 로그인 성공 → 사용자 정보로 포트폴리오 로드
+# ─────────────────────────────────────────────
+
+_user_email = st.user.email or st.user.get("sub", "unknown")
+_user_name  = st.user.get("name", _user_email)
+_file_key   = email_to_filename(_user_email)
+
+# 사용자가 바뀌었을 때만 포트폴리오 재로드
+if "portfolio" not in st.session_state or st.session_state.get("_user_email") != _user_email:
+    data_path = Path(__file__).parent / "data" / f"portfolio_{_file_key}.json"
+    st.session_state.portfolio = Portfolio(path=data_path)
+    st.session_state["_user_email"] = _user_email
+    # 사용자 전환 시 캐시 초기화
+    invalidate_cache("prices_data", "buy_result", "bt_result", "rebal_result", "sell_result")
+
+portfolio: Portfolio = st.session_state.portfolio
+
+
+# ─────────────────────────────────────────────
+# 헤더 (로그인 정보 + 로그아웃 버튼 포함)
+# ─────────────────────────────────────────────
+
+col_header, col_user = st.columns([5, 1])
+
+with col_header:
+    st.markdown("""
+    <div class="main-header">
+        <div style="font-size:2.2rem">📊</div>
+        <div>
+            <h1>Quant Portfolio Manager</h1>
+            <p>팩터 가중 모멘텀 전략 · 백테스트 · 매수 추천</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_user:
+    st.markdown(f"""
+    <div style="text-align:right; padding-top:8px; font-size:0.82rem; color:#90caf9;">
+        👤 {_user_name}<br>
+        <span style="font-size:0.75rem; color:#5c6f99;">{_user_email}</span>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("로그아웃", key="btn_logout"):
+        st.logout()
+
 
 # ─────────────────────────────────────────────
 # 탭
@@ -319,13 +368,11 @@ with tab1:
     else:
         st.markdown('<div class="section-label">보유 종목 현황</div>', unsafe_allow_html=True)
 
-        # 현재가 캐시
         prices_cache = st.session_state.get("prices_data", None)
         fx = prices_cache[1] if prices_cache else None
         prices_map = prices_cache[0] if prices_cache else None
         fx_est = prices_cache[2] if prices_cache else False
 
-        # 테이블 데이터 구성
         def build_df_hold(holdings_dict, prices_map, fx):
             rows = []
             for t, s in holdings_dict.items():
@@ -397,12 +444,10 @@ with tab1:
             )
             st.write("")
 
-        # 종목명 컬럼 삽입
         if "ticker_names" in st.session_state:
             names_map = st.session_state["ticker_names"]
             df_hold.insert(1, "종목명", df_hold["티커"].map(names_map))
 
-        # data_editor: 보유 수량 직접 편집 가능
         edited_df = st.data_editor(
             df_hold,
             column_config=hold_col_cfg,
@@ -412,7 +457,6 @@ with tab1:
             key="hold_editor",
         )
 
-        # 수량 변경 감지 → 즉시 저장 + 평가금액 재계산
         for _, row in edited_df.iterrows():
             t = row["티커"]
             new_shares = float(row["보유 수량"])
@@ -420,7 +464,6 @@ with tab1:
                 portfolio.set_holding(t, new_shares)
                 portfolio.save()
                 invalidate_cache("buy_result", "bt_result", "rebal_result")
-                # 평가금액 재계산 (현재가 있을 때만)
                 if prices_map is not None:
                     try:
                         p = float(prices_map[t])
@@ -579,7 +622,6 @@ with tab2:
 with tab3:
     st.markdown('<div class="section-label">백테스트 설정</div>', unsafe_allow_html=True)
 
-    # ── 전략 설명 ─────────────────────────────────────────────────
     with st.expander("📖 KH 전략이란? (클릭하여 펼치기)", expanded=False):
         st.markdown("""
 <div class="info-banner">
@@ -604,7 +646,6 @@ QQQ(나스닥 100 ETF)의 현재가가 200일 이동평균선 위에 있으면 <
 </div>
 """, unsafe_allow_html=True)
 
-    # ── 백테스트 신뢰도 안내 ──────────────────────────────────────
     st.markdown("""
 <div class="info-banner">
 ⚠️ <b>백테스트 해석 주의사항</b><br>
@@ -644,7 +685,6 @@ QQQ(나스닥 100 ETF)의 현재가가 200일 이동평균선 위에 있으면 <
             portfolio.benchmarks = bm_tickers
             portfolio.save()
 
-            # ── 고정 날짜 계산 ──
             from datetime import date, timedelta
             period_to_days = {"2y": 730, "3y": 1095, "5y": 1825}
             end_date   = date.today().strftime("%Y-%m-%d")
@@ -731,7 +771,6 @@ QQQ(나스닥 100 ETF)의 현재가가 200일 이동평균선 위에 있으면 <
         )
         st.plotly_chart(fig, width="stretch", key="bt_chart")
 
-        # ── 성과 요약 (XIRR 기반) ────────────────────────────────
         st.markdown('<div class="section-label">성과 요약 (XIRR 기준)</div>', unsafe_allow_html=True)
 
         invested = df_bt["Invested"].iloc[-1]
@@ -742,7 +781,6 @@ QQQ(나스닥 100 ETF)의 현재가가 200일 이동평균선 위에 있으면 <
             final   = df_bt[col].iloc[-1]
             ret_pct = (final / invested - 1) * 100 if invested > 0 else 0.0
 
-            # XIRR 계산
             xirr_val = calc_xirr_from_backtest(
                 df_bt, portfolio.weekly_budget, col=col
             )
@@ -849,7 +887,6 @@ with tab4:
 
             regime_rb = "🐂 강세장 (모멘텀 강화)" if is_bull_rb else "🐻 약세장 (방어 모드)"
 
-            # ── 현재 포트폴리오 총액 계산 ──────────────────────────
             holdings_rb = portfolio.holdings
             total_val_usd = 0.0
             curr_val_usd = {}
@@ -882,7 +919,6 @@ with tab4:
             )
             st.write("")
 
-            # ── 리밸런싱 테이블 계산 ───────────────────────────────
             rows_rb = []
             for t in all_tickers:
                 try:
@@ -892,20 +928,10 @@ with tab4:
 
                 curr_shares = holdings_rb.get(t, 0.0)
                 curr_val    = curr_val_usd.get(t, 0.0)
-
-                # 현재 비중
                 curr_weight = (curr_val / total_val_usd) if total_val_usd > 0 else 0.0
-
-                # 목표 비중 (Top N 이외 종목은 0)
                 target_weight = float(weights_rb.get(t, 0.0)) if t in weights_rb.index else 0.0
-
-                # 목표 평가금액 (USD)
                 target_val_usd = total_val_usd * target_weight
-
-                # 목표 수량
                 target_shares = (target_val_usd / curr_price) if curr_price > 0 else 0.0
-
-                # 차이 (양수 = 매수 필요 / 음수 = 매도 필요)
                 diff_shares = target_shares - curr_shares
                 diff_usd    = diff_shares * curr_price
                 diff_krw    = diff_usd * fx_rb
@@ -936,7 +962,6 @@ with tab4:
             st.markdown('<div class="section-label">종목별 리밸런싱 내역</div>', unsafe_allow_html=True)
             st.dataframe(df_rb, column_config=rb_col_cfg, width="stretch", hide_index=True)
 
-            # ── 매도 / 매수 분리 요약 ─────────────────────────────
             sell_df = df_rb[df_rb["조정 수량"] < -0.0001].copy()
             buy_df  = df_rb[df_rb["조정 수량"] >  0.0001].copy()
 
@@ -983,7 +1008,6 @@ with tab4:
                         unsafe_allow_html=True,
                     )
 
-            # ── 파이차트: 현재 vs 목표 비중 ──────────────────────
             st.markdown('<div class="section-label">현재 비중 vs 목표 비중</div>', unsafe_allow_html=True)
             chart_colors = [
                 "#3949ab","#1e88e5","#00acc1","#43a047",
@@ -1058,8 +1082,13 @@ with tab5:
             placeholder="QQQM, XLK, SPY",
         )
 
-    st.markdown('<div class="section-label">저장 위치</div>', unsafe_allow_html=True)
-    st.code(str(portfolio.path.resolve()), language=None)
+    st.markdown('<div class="section-label">계정 정보</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="info-banner">
+        👤 <b>로그인 계정:</b> {_user_name} ({_user_email})<br>
+        💾 <b>데이터 저장 경로:</b> <code>portfolio_{_file_key}.json</code>
+    </div>
+    """, unsafe_allow_html=True)
 
     if st.button("💾 설정 저장", key="btn_save_settings"):
         portfolio.weekly_budget = new_budget
@@ -1071,7 +1100,6 @@ with tab5:
             portfolio.save()
             st.success("✅ 설정이 저장되었습니다!")
 
-    # ── JSON 내보내기: 파일 존재 여부 무관하게 메모리 상태 직렬화 ──
     st.markdown('<div class="section-label">포트폴리오 JSON 내보내기</div>', unsafe_allow_html=True)
     json_str = json.dumps(portfolio._data, ensure_ascii=False, indent=2)
     st.download_button(
@@ -1138,7 +1166,7 @@ with tab6:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         use_mcap6 = st.checkbox(
             "시가총액 가중 사용", value=True,
-            help="매수 추천/리밸런싱 탭과 동일한 설정을 사용하세요. 시총 가중 시 대형주에 기본 비중이 더 부여되어 순위가 달라집니다.",
+            help="매수 추천/리밸런싱 탭과 동일한 설정을 사용하세요.",
             key="sell_mcap",
         )
 
@@ -1151,7 +1179,6 @@ with tab6:
             st.error("포트폴리오 탭에서 종목을 먼저 입력하세요.")
         else:
             tickers_all = portfolio.tickers()
-            # 시총 캐시 초기화 (새 분석 시마다 갱신)
             if "mcap_cache6" in st.session_state:
                 del st.session_state["mcap_cache6"]
             with st.spinner("1달치 일별 랭킹 계산 중..."):
@@ -1204,7 +1231,6 @@ with tab6:
                         m_w6   = 0.7 if is_bull6 else 0.4
                         v_w6   = 0.3 if is_bull6 else 0.6
 
-                        # 기본 비중 (시총 가중 or 균등)
                         if use_mcap6:
                             if "mcap_cache6" not in st.session_state:
                                 st.session_state["mcap_cache6"] = fetch_market_caps(tickers_all)
@@ -1261,7 +1287,6 @@ with tab6:
         sell_candidates  = in_top_n[in_top_n == 0].index.tolist()
         watch_candidates = in_top_n[(in_top_n > 0) & (in_top_n < total_days * 0.5)].index.tolist()
 
-        # ─── 요약 카드 ───
         c1, c2, c3 = st.columns(3)
         c1.markdown(
             f'<div class="metric-card"><div class="label">분석 기간 (거래일)</div>'
@@ -1280,7 +1305,6 @@ with tab6:
         )
         st.write("")
 
-        # ─── 매도 후보 테이블 ───
         if sell_candidates:
             st.markdown(
                 f'<div style="background:#2a0e0e;border:1px solid #ef5350;border-radius:8px;padding:10px 16px;color:#ef9a9a;margin:8px 0;">'
@@ -1310,7 +1334,6 @@ with tab6:
                 unsafe_allow_html=True,
             )
 
-        # ─── 관찰 종목 테이블 ───
         if watch_candidates:
             st.markdown(
                 f'<div style="background:#2a1a0e;border:1px solid #ffa726;border-radius:8px;padding:10px 16px;color:#ffcc80;margin:8px 0;">'
@@ -1338,7 +1361,6 @@ with tab6:
                 width='stretch',
             )
 
-        # ─── 일별 순위 히트맵 ───
         st.write("")
         st.markdown('<div class="section-label">일별 순위 히트맵 (최근 1달)</div>', unsafe_allow_html=True)
 
@@ -1380,7 +1402,6 @@ with tab6:
         )
         st.plotly_chart(fig_hm, width='stretch', key="sell_heatmap")
 
-        # ─── 진입률 바 차트 ───
         st.markdown('<div class="section-label">종목별 Top N 진입률</div>', unsafe_allow_html=True)
         entry_pct  = (in_top_n / total_days * 100).reindex(tickers_all).sort_values(ascending=True)
         bar_colors = ["#ef5350" if v == 0 else ("#ffa726" if v < 50 else "#66bb6a") for v in entry_pct.values]
