@@ -248,8 +248,7 @@ st.html("""
         window.location.replace(window.location.pathname + "?" + params.toString());
     }
 })();
-</script>
-""")
+</script>, unsafe_allow_javascript=True)
 
 _uid = st.query_params.get("uid", "default")
 
