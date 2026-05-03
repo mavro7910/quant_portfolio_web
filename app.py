@@ -261,7 +261,7 @@ if not st.user.is_logged_in:
     col_login, col_empty = st.columns([1, 3])
     with col_login:
         if st.button("🔑 Google로 로그인", key="btn_login"):
-            st.login()
+            st.login("google")
     st.stop()
 
 
