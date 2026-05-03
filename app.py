@@ -988,7 +988,7 @@ with tab4:
                 texttemplate="%{percent:.1%}",
                 textposition="inside",
                 insidetextorientation="radial",
-                domain={"x": [0, 0.46]},
+                domain={"x": [0.1, 0.9], "y": [0.52, 1.0]},
                 marker=dict(colors=chart_colors[:len(df_rb)]),
                 title=dict(text="현재 비중", font=dict(color="#e0e0e0", size=12)),
             ))
@@ -1000,15 +1000,15 @@ with tab4:
                 texttemplate="%{percent:.1%}",
                 textposition="inside",
                 insidetextorientation="radial",
-                domain={"x": [0.54, 1.0]},
+                domain={"x": [0.1, 0.9], "y": [0.0, 0.48]},
                 marker=dict(colors=chart_colors[:len(df_rb)]),
                 title=dict(text="목표 비중", font=dict(color="#e0e0e0", size=12)),
             ))
             fig_rb.update_layout(
                 paper_bgcolor="#1a1f2e", plot_bgcolor="#1a1f2e",
                 font_color="#e0e0e0",
-                margin=dict(t=30, b=10, l=10, r=10),
-                height=360,
+                margin=dict(t=40, b=10, l=10, r=10),
+                height=720,
                 showlegend=True,
                 legend=dict(orientation="v", x=1.02, y=0.5,
                             font=dict(color="#e0e0e0", size=11), bgcolor="rgba(0,0,0,0)"),
