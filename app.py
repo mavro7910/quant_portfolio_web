@@ -229,36 +229,24 @@ header    { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
+import uuid
+ 
 # ─────────────────────────────────────────────
-# 세션 초기화 (UUID 기반 사용자 구분)
+# UUID 기반 사용자 구분 (JS 없이 순수 Python)
 # ─────────────────────────────────────────────
-
-# 브라우저 로컬스토리지에서 UUID 읽기 (없으면 생성 후 URL에 반영)
-st.html("""
-<script>
-(function() {
-    let uid = localStorage.getItem("portfolio_uid");
-    if (!uid) {
-        uid = crypto.randomUUID();
-        localStorage.setItem("portfolio_uid", uid);
-    }
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("uid") !== uid) {
-        params.set("uid", uid);
-        window.location.replace(window.location.pathname + "?" + params.toString());
-    }
-})();
-</script>
-""", unsafe_allow_javascript=True)
-
-_uid = st.query_params.get("uid", "default")
-
+ 
+if "uid" not in st.query_params:
+    st.query_params["uid"] = str(uuid.uuid4())
+ 
+_uid = st.query_params["uid"]
+ 
 if "portfolio" not in st.session_state or st.session_state.get("_uid") != _uid:
     data_path = Path(__file__).parent / "data" / f"portfolio_{_uid}.json"
     st.session_state.portfolio = Portfolio(path=data_path)
     st.session_state["_uid"] = _uid
-
+ 
 portfolio: Portfolio = st.session_state.portfolio
+ 
 
 # ─────────────────────────────────────────────
 # 헤더

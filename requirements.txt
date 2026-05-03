@@ -1,37 +1,9 @@
-# ─────────────────────────────────────────────
-# Quant Portfolio Manager - requirements.txt
-# 위치: 프로젝트 루트 (app.py 와 동일한 폴더)
-# 주의: core/requirements.txt 가 아닌 루트에 있어야
-# Streamlit Cloud가 자동으로 인식합니다.
-# ─────────────────────────────────────────────
-
-# -- Web Framework --
-# 1.32.0 → 1.45.0: st.progress text 파라미터 안정화,
-# st.rerun() 정식 지원, 성능 개선
 streamlit>=1.45.0
-
-# -- Data & Finance --
-# pandas 2.x 유지 (yfinance 1.x 호환성 검증됨)
-pandas>=2.2.0,<3.0.0
-
-# numpy: pandas 2.x / yfinance 1.x 와 호환되는 버전
-numpy>=1.26.0,<2.1.0
-
-# yfinance: 0.2.35 → 1.2.0+
-# 1.x 부터 MultiIndex 컬럼 구조 변경 (extract_close 수정 반영됨)
-# 최신 Yahoo Finance API 대응, auto_adjust 기본값 변경 포함
 yfinance>=1.2.0
-
-# -- Visualization --
+pandas>=2.2.0,<3.0
+numpy>=1.26.0,<2.1
 plotly>=5.22.0
-
-# -- Math / Statistics --
-# XIRR(내부수익률) 계산에 사용 (brentq)
 scipy>=1.13.0
-
-# -- Utilities --
-# Pillow: streamlit 이미지 처리 의존성
 Pillow>=10.3.0
-
-# requests: yfinance 내부 의존성, 명시적 고정으로 충돌 방지
 requests>=2.32.0
+supabase>=2.0.0
