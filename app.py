@@ -303,50 +303,66 @@ with tab1:
     else:
         st.markdown('<div class="section-label">보유 종목 현황</div>', unsafe_allow_html=True)
 
-        # 시세 미조회 상태의 기본 테이블 (숫자형 유지, None으로 미조회 표시)
-        df_hold = pd.DataFrame(
-            [(t, s, None, None) for t, s in holdings.items()],
-            columns=["티커", "보유 수량", "현재가 (USD)", "평가금액 (KRW)"],
-        )
+        # 현재가 캐시
+        prices_cache = st.session_state.get("prices_data", None)
+        fx = prices_cache[1] if prices_cache else None
+        prices_map = prices_cache[0] if prices_cache else None
+        fx_est = prices_cache[2] if prices_cache else False
+
+        # 테이블 데이터 구성
+        def build_df_hold(holdings_dict, prices_map, fx):
+            rows = []
+            for t, s in holdings_dict.items():
+                p = None
+                val = None
+                if prices_map is not None:
+                    try:
+                        p = float(prices_map[t])
+                        val = p * s * fx
+                    except (KeyError, TypeError, ValueError):
+                        p = None
+                rows.append({"티커": t, "보유 수량": s, "현재가 (USD)": p, "평가금액 (KRW)": val})
+            return pd.DataFrame(rows)
+
+        df_hold = build_df_hold(holdings, prices_map, fx)
+
         hold_col_cfg = {
             "현재가 (USD)": st.column_config.NumberColumn(format="$%.2f"),
             "평가금액 (KRW)": st.column_config.NumberColumn(format="₩%.0f"),
+            "보유 수량": st.column_config.NumberColumn(format="%.6f"),
         }
 
-        if st.button("🔄 시세 갱신", key="btn_refresh"):
-            with st.spinner("시세 가져오는 중..."):
-                try:
-                    prices, fx, fx_est = fetch_prices_and_fx(portfolio.tickers())
-                    st.session_state["prices_data"] = (prices, fx, fx_est)
-                except Exception as e:
-                    st.error(f"시세 조회 실패: {e}")
+        col_btn_ref, col_btn_name = st.columns([1, 1])
+        with col_btn_ref:
+            if st.button("🔄 시세 갱신", key="btn_refresh"):
+                with st.spinner("시세 가져오는 중..."):
+                    try:
+                        prices, fx_new, fx_est_new = fetch_prices_and_fx(portfolio.tickers())
+                        st.session_state["prices_data"] = (prices, fx_new, fx_est_new)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"시세 조회 실패: {e}")
+        with col_btn_name:
+            if st.button("🔍 종목명 조회", key="btn_names"):
+                with st.spinner("종목명 가져오는 중..."):
+                    import yfinance as yf
+                    names = {}
+                    for t in portfolio.tickers():
+                        try:
+                            info = yf.Ticker(t).info
+                            names[t] = info.get("longName") or info.get("shortName") or t
+                        except Exception:
+                            names[t] = t
+                    st.session_state["ticker_names"] = names
 
-        if "prices_data" in st.session_state:
-            prices, fx, fx_est = st.session_state["prices_data"]
+        if fx_est:
+            st.markdown(
+                '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 -- 추정값 사용 중</div>',
+                unsafe_allow_html=True,
+            )
 
-            if fx_est:
-                st.markdown(
-                    '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 -- 추정값 사용 중</div>',
-                    unsafe_allow_html=True,
-                )
-
-            rows = []
-            total_krw = 0.0
-            for t, s in holdings.items():
-                try:
-                    p = float(prices[t])
-                except (KeyError, TypeError, ValueError):
-                    p = None
-
-                if p is not None:
-                    val = p * s * fx
-                    total_krw += val
-                else:
-                    val = None
-                rows.append((t, s, p, val))
-
-            df_hold = pd.DataFrame(rows, columns=["티커", "보유 수량", "현재가 (USD)", "평가금액 (KRW)"])
-
+        if prices_map is not None:
+            total_krw = df_hold["평가금액 (KRW)"].sum()
             c1, c2, c3 = st.columns(3)
             c1.markdown(
                 f'<div class="metric-card"><div class="label">보유 종목 수</div>'
@@ -365,7 +381,37 @@ with tab1:
             )
             st.write("")
 
-        st.dataframe(df_hold, column_config=hold_col_cfg, width="stretch", hide_index=True)
+        # 종목명 컬럼 삽입
+        if "ticker_names" in st.session_state:
+            names_map = st.session_state["ticker_names"]
+            df_hold.insert(1, "종목명", df_hold["티커"].map(names_map))
+
+        # data_editor: 보유 수량 직접 편집 가능
+        edited_df = st.data_editor(
+            df_hold,
+            column_config=hold_col_cfg,
+            disabled=[c for c in df_hold.columns if c != "보유 수량"],
+            use_container_width=True,
+            hide_index=True,
+            key="hold_editor",
+        )
+
+        # 수량 변경 감지 → 즉시 저장 + 평가금액 재계산
+        for _, row in edited_df.iterrows():
+            t = row["티커"]
+            new_shares = float(row["보유 수량"])
+            if abs(new_shares - holdings.get(t, 0.0)) > 1e-9:
+                portfolio.set_holding(t, new_shares)
+                portfolio.save()
+                invalidate_cache("buy_result", "bt_result", "rebal_result")
+                # 평가금액 재계산 (현재가 있을 때만)
+                if prices_map is not None:
+                    try:
+                        p = float(prices_map[t])
+                        st.session_state["_recalc"] = True
+                    except Exception:
+                        pass
+                st.rerun()
 
 # ══════════════════════════════════════════════
 # 탭 2 : 매수 추천
@@ -933,10 +979,7 @@ with tab4:
                 labels=df_rb["티커"],
                 values=df_rb["현재 비중 (%)"].clip(lower=0),
                 name="현재", hole=0.45,
-                textinfo="percent",
-                texttemplate="%{percent:.1%}",
-                textposition="inside",
-                insidetextorientation="radial",
+                textinfo="percent+label",
                 domain={"x": [0, 0.46]},
                 marker=dict(colors=chart_colors[:len(df_rb)]),
                 title=dict(text="현재 비중", font=dict(color="#e0e0e0", size=12)),
@@ -945,10 +988,7 @@ with tab4:
                 labels=df_rb["티커"],
                 values=df_rb["목표 비중 (%)"].clip(lower=0),
                 name="목표", hole=0.45,
-                textinfo="percent",
-                texttemplate="%{percent:.1%}",
-                textposition="inside",
-                insidetextorientation="radial",
+                textinfo="percent+label",
                 domain={"x": [0.54, 1.0]},
                 marker=dict(colors=chart_colors[:len(df_rb)]),
                 title=dict(text="목표 비중", font=dict(color="#e0e0e0", size=12)),
@@ -958,9 +998,7 @@ with tab4:
                 font_color="#e0e0e0",
                 margin=dict(t=30, b=10, l=10, r=10),
                 height=360,
-                showlegend=True,
-                legend=dict(orientation="v", x=1.02, y=0.5,
-                            font=dict(color="#e0e0e0", size=11), bgcolor="rgba(0,0,0,0)"),
+                showlegend=False,
             )
             st.plotly_chart(fig_rb, width="stretch", key="rb_pie_chart")
 
