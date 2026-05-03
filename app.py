@@ -230,11 +230,33 @@ header    { visibility: hidden; }
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# 세션 초기화
+# 세션 초기화 (UUID 기반 사용자 구분)
 # ─────────────────────────────────────────────
 
-if "portfolio" not in st.session_state:
-    st.session_state.portfolio = Portfolio()
+# 브라우저 로컬스토리지에서 UUID 읽기 (없으면 생성 후 URL에 반영)
+st.html("""
+<script>
+(function() {
+    let uid = localStorage.getItem("portfolio_uid");
+    if (!uid) {
+        uid = crypto.randomUUID();
+        localStorage.setItem("portfolio_uid", uid);
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("uid") !== uid) {
+        params.set("uid", uid);
+        window.location.replace(window.location.pathname + "?" + params.toString());
+    }
+})();
+</script>
+""")
+
+_uid = st.query_params.get("uid", "default")
+
+if "portfolio" not in st.session_state or st.session_state.get("_uid") != _uid:
+    data_path = Path(__file__).parent / "data" / f"portfolio_{_uid}.json"
+    st.session_state.portfolio = Portfolio(path=data_path)
+    st.session_state["_uid"] = _uid
 
 portfolio: Portfolio = st.session_state.portfolio
 
@@ -979,19 +1001,25 @@ with tab4:
                 "#fb8c00","#e53935","#8e24aa","#00897b","#f4511e","#6d4c41",
                 "#546e7a","#78909c","#c0ca33","#26a69a","#ec407a",
             ]
+
+            has_holdings = df_rb["현재 비중 (%)"].sum() > 0.01
+
             fig_rb = go.Figure()
-            fig_rb.add_trace(go.Pie(
-                labels=df_rb["티커"],
-                values=df_rb["현재 비중 (%)"].clip(lower=0),
-                name="현재", hole=0.45,
-                textinfo="percent",
-                texttemplate="%{percent:.1%}",
-                textposition="inside",
-                insidetextorientation="radial",
-                domain={"x": [0.1, 0.9], "y": [0.52, 1.0]},
-                marker=dict(colors=chart_colors[:len(df_rb)]),
-                title=dict(text="현재 비중", font=dict(color="#e0e0e0", size=12)),
-            ))
+
+            if has_holdings:
+                fig_rb.add_trace(go.Pie(
+                    labels=df_rb["티커"],
+                    values=df_rb["현재 비중 (%)"].clip(lower=0),
+                    name="현재", hole=0.45,
+                    textinfo="percent",
+                    texttemplate="%{percent:.1%}",
+                    textposition="inside",
+                    insidetextorientation="radial",
+                    domain={"x": [0.1, 0.9], "y": [0.52, 1.0]},
+                    marker=dict(colors=chart_colors[:len(df_rb)]),
+                    title=dict(text="현재 비중", font=dict(color="#e0e0e0", size=12)),
+                ))
+
             fig_rb.add_trace(go.Pie(
                 labels=df_rb["티커"],
                 values=df_rb["목표 비중 (%)"].clip(lower=0),
@@ -1000,15 +1028,16 @@ with tab4:
                 texttemplate="%{percent:.1%}",
                 textposition="inside",
                 insidetextorientation="radial",
-                domain={"x": [0.1, 0.9], "y": [0.0, 0.48]},
+                domain={"x": [0.1, 0.9], "y": [0.0, 0.48] if has_holdings else [0.1, 0.9]},
                 marker=dict(colors=chart_colors[:len(df_rb)]),
                 title=dict(text="목표 비중", font=dict(color="#e0e0e0", size=12)),
             ))
+
             fig_rb.update_layout(
                 paper_bgcolor="#1a1f2e", plot_bgcolor="#1a1f2e",
                 font_color="#e0e0e0",
                 margin=dict(t=40, b=10, l=10, r=10),
-                height=720,
+                height=720 if has_holdings else 400,
                 showlegend=True,
                 legend=dict(orientation="v", x=1.02, y=0.5,
                             font=dict(color="#e0e0e0", size=11), bgcolor="rgba(0,0,0,0)"),
