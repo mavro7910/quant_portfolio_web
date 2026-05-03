@@ -5,7 +5,8 @@ app.py -- 개선판
 1. 성과 요약: CAGR → XIRR (적립식 내부수익률)로 교체
 2. 백테스트 탭에 서바이버십 바이어스 경고 문구 추가
 3. 시총 가중 체크박스에 look-ahead 관련 안내 추가
-4. 나머지 UI/로직은 기존 유지
+4. JSON 내보내기 버그 수정: 파일 존재 여부 무관하게 메모리 상태 직렬화
+5. 나머지 UI/로직은 기존 유지
 """
 
 import json
@@ -643,7 +644,7 @@ QQQ(나스닥 100 ETF)의 현재가가 200일 이동평균선 위에 있으면 <
             portfolio.benchmarks = bm_tickers
             portfolio.save()
 
-            # ── 고정 날짜 계산 ── ← 추가
+            # ── 고정 날짜 계산 ──
             from datetime import date, timedelta
             period_to_days = {"2y": 730, "3y": 1095, "5y": 1825}
             end_date   = date.today().strftime("%Y-%m-%d")
@@ -669,8 +670,8 @@ QQQ(나스닥 100 ETF)의 현재가가 200일 이동평균선 위에 있으면 <
                         use_market_cap=use_mcap_bt,
                         progress_cb=progress_cb,
                         top_n=int(n_tickers),
-                        start=start_date,   # ← 추가
-                        end=end_date,       # ← 추가
+                        start=start_date,
+                        end=end_date,
                     )
                 st.session_state["bt_result"] = df_bt
                 progress_bar.progress(100)
@@ -1070,14 +1071,13 @@ with tab5:
             portfolio.save()
             st.success("✅ 설정이 저장되었습니다!")
 
+    # ── JSON 내보내기: 파일 존재 여부 무관하게 메모리 상태 직렬화 ──
     st.markdown('<div class="section-label">포트폴리오 JSON 내보내기</div>', unsafe_allow_html=True)
-    if portfolio.path.exists():
-        with open(portfolio.path, encoding="utf-8") as f:
-            json_str = f.read()
-        st.download_button(
-            "⬇️ portfolio.json 다운로드",
-            data=json_str, file_name="portfolio.json", mime="application/json",
-        )
+    json_str = json.dumps(portfolio._data, ensure_ascii=False, indent=2)
+    st.download_button(
+        "⬇️ portfolio.json 다운로드",
+        data=json_str, file_name="portfolio.json", mime="application/json",
+    )
 
     st.markdown('<div class="section-label">포트폴리오 JSON 불러오기</div>', unsafe_allow_html=True)
     uploaded     = st.file_uploader("portfolio.json 업로드", type=["json"], key="json_uploader")
