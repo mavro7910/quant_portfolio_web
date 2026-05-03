@@ -251,8 +251,8 @@ st.markdown("""
 # 탭
 # ─────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📋 포트폴리오", "🧮 매수 추천", "📈 백테스트", "⚙️ 설정",
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📋 포트폴리오", "🧮 매수 추천", "📈 백테스트", "⚖️ 리밸런싱", "⚙️ 설정",
 ])
 
 # ══════════════════════════════════════════════
@@ -517,6 +517,31 @@ with tab2:
 with tab3:
     st.markdown('<div class="section-label">백테스트 설정</div>', unsafe_allow_html=True)
 
+    # ── 전략 설명 ─────────────────────────────────────────────────
+    with st.expander("📖 KH 전략이란? (클릭하여 펼치기)", expanded=False):
+        st.markdown("""
+<div class="info-banner">
+<b>🔬 KH 전략 작동 방식</b><br><br>
+
+<b>① 시장 국면 판단 (Bull / Bear)</b><br>
+QQQ(나스닥 100 ETF)의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</b>, 아래면 <b>약세장(Bear)</b>으로 판단합니다.<br><br>
+
+<b>② 팩터 점수 계산</b><br>
+· <b>모멘텀 점수</b>: 21일(10%) · 63일(20%) · 126일(30%) · 252일(40%) 수익률의 가중 순위 — 최근 수익률이 높은 종목에 높은 점수<br>
+· <b>변동성 역수 점수</b>: 60일 변동성이 낮을수록 높은 점수 — 안정적인 종목 선호<br><br>
+
+<b>③ 국면별 팩터 배합</b><br>
+· 강세장: 모멘텀 70% + 변동성역수 30% → 공격적 배분<br>
+· 약세장: 모멘텀 40% + 변동성역수 60% → 방어적 배분<br><br>
+
+<b>④ 기본 비중 × 팩터 점수</b><br>
+시가총액 가중(옵션)을 기본 비중으로 사용하고, 팩터 점수를 곱해 최종 비중을 산출합니다. 단일 종목 최대 비중은 <b>25%</b>로 제한됩니다.<br><br>
+
+<b>⑤ 매주 적립식 매수 시뮬레이션</b><br>
+매주 월요일 주간 예산을 위 비중대로 상위 N개 종목에 분할 매수하여 누적 포트폴리오 가치를 계산합니다.
+</div>
+""", unsafe_allow_html=True)
+
     # ── 백테스트 신뢰도 안내 ──────────────────────────────────────
     st.markdown("""
 <div class="info-banner">
@@ -547,7 +572,7 @@ with tab3:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_bt = st.button("▶ 백테스트 실행", key="btn_bt")
 
-    st.caption(f"📌 주간 투자금: ₩{portfolio.weekly_budget:,} | 보유 종목: {len(portfolio.holdings)}개")
+    st.caption(f"📌 주간 투자금: ₩{portfolio.weekly_budget:,} | 등록 종목: {len(portfolio.holdings)}개 | 매수 집중 Top N: {int(n_tickers)}개")
 
     if run_bt:
         if not portfolio.tickers():
@@ -693,10 +718,262 @@ with tab3:
         )
 
 # ══════════════════════════════════════════════
-# 탭 4 : 설정
+# 탭 4 : 리밸런싱
 # ══════════════════════════════════════════════
 
 with tab4:
+    st.markdown('<div class="section-label">리밸런싱 계산기</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+<div class="info-banner">
+📅 <b>리밸런싱이란?</b><br>
+시간이 지나면 종목별 수익률 차이로 인해 실제 비중이 목표 비중에서 벗어납니다. 반기 또는 분기마다 초과 상승한 종목을 일부 매도하고 비중이 낮아진 종목을 매수하여 목표 비중으로 되돌리는 작업입니다.<br><br>
+아래에서 현재 시세를 불러온 뒤 <b>알고리즘 목표 비중 대비 초과/부족 수량</b>을 확인하세요.
+</div>
+""", unsafe_allow_html=True)
+
+    if not portfolio.tickers():
+        st.info("포트폴리오 탭에서 종목을 먼저 추가하세요.")
+    else:
+        col_rb1, col_rb2, col_rb3 = st.columns([1.5, 1.5, 1.5])
+        with col_rb1:
+            rb_use_mcap = st.checkbox(
+                "시가총액 가중 사용", value=True,
+                help="목표 비중 계산 시 시가총액 가중 사용 여부. 매수 추천과 동일한 설정을 권장합니다.",
+                key="rb_mcap",
+            )
+        with col_rb2:
+            rb_top_n = st.number_input(
+                "비중 산출 종목 수 (Top N)",
+                min_value=1,
+                max_value=len(portfolio.tickers()),
+                value=min(10, len(portfolio.tickers())),
+                step=1,
+                help="목표 비중을 상위 N개 종목에만 배분합니다. 매수 추천 탭과 동일한 값을 사용하세요.",
+                key="rb_topn",
+            )
+        with col_rb3:
+            st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
+            run_rebal = st.button("🔄 리밸런싱 계산 실행", key="btn_rebal")
+
+        if run_rebal:
+            with st.spinner("시세 및 목표 비중 계산 중..."):
+                try:
+                    res_rb = buy_recommendation(
+                        holdings=portfolio.holdings,
+                        budget_krw=portfolio.weekly_budget,
+                        use_market_cap=rb_use_mcap,
+                        top_n=int(rb_top_n),
+                    )
+                    st.session_state["rebal_result"] = res_rb
+                except Exception as e:
+                    st.error(f"오류 발생: {e}")
+
+        if "rebal_result" in st.session_state:
+            res_rb = st.session_state["rebal_result"]
+
+            prices_rb   = res_rb["prices"]
+            weights_rb  = res_rb["weights"]
+            fx_rb       = res_rb["fx_rate"]
+            fx_est_rb   = res_rb.get("fx_estimated", False)
+            is_bull_rb  = res_rb["is_bull"]
+            all_tickers = portfolio.tickers()
+
+            if fx_est_rb:
+                st.markdown(
+                    '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 -- 추정값 사용 중</div>',
+                    unsafe_allow_html=True,
+                )
+
+            regime_rb = "🐂 강세장 (모멘텀 강화)" if is_bull_rb else "🐻 약세장 (방어 모드)"
+
+            # ── 현재 포트폴리오 총액 계산 ──────────────────────────
+            holdings_rb = portfolio.holdings
+            total_val_usd = 0.0
+            curr_val_usd = {}
+            for t in all_tickers:
+                try:
+                    p = float(prices_rb.get(t, 0) or 0)
+                except Exception:
+                    p = 0.0
+                val = p * holdings_rb.get(t, 0)
+                curr_val_usd[t] = val
+                total_val_usd += val
+
+            total_val_krw = total_val_usd * fx_rb
+
+            c1, c2, c3 = st.columns(3)
+            c1.markdown(
+                f'<div class="metric-card"><div class="label">시장 국면</div>'
+                f'<div class="value" style="font-size:0.95rem">{regime_rb}</div></div>',
+                unsafe_allow_html=True,
+            )
+            c2.markdown(
+                f'<div class="metric-card"><div class="label">포트폴리오 총액</div>'
+                f'<div class="value">₩{total_val_krw:,.0f}</div></div>',
+                unsafe_allow_html=True,
+            )
+            c3.markdown(
+                f'<div class="metric-card"><div class="label">USD/KRW</div>'
+                f'<div class="value">{fx_rb:,.2f}</div></div>',
+                unsafe_allow_html=True,
+            )
+            st.write("")
+
+            # ── 리밸런싱 테이블 계산 ───────────────────────────────
+            rows_rb = []
+            for t in all_tickers:
+                try:
+                    curr_price = float(prices_rb.get(t, 0) or 0)
+                except Exception:
+                    curr_price = 0.0
+
+                curr_shares = holdings_rb.get(t, 0.0)
+                curr_val    = curr_val_usd.get(t, 0.0)
+
+                # 현재 비중
+                curr_weight = (curr_val / total_val_usd) if total_val_usd > 0 else 0.0
+
+                # 목표 비중 (Top N 이외 종목은 0)
+                target_weight = float(weights_rb.get(t, 0.0)) if t in weights_rb.index else 0.0
+
+                # 목표 평가금액 (USD)
+                target_val_usd = total_val_usd * target_weight
+
+                # 목표 수량
+                target_shares = (target_val_usd / curr_price) if curr_price > 0 else 0.0
+
+                # 차이 (양수 = 매수 필요 / 음수 = 매도 필요)
+                diff_shares = target_shares - curr_shares
+                diff_usd    = diff_shares * curr_price
+                diff_krw    = diff_usd * fx_rb
+
+                rows_rb.append({
+                    "티커":            t,
+                    "현재가 (USD)":    curr_price if curr_price > 0 else None,
+                    "보유 수량":       curr_shares,
+                    "현재 비중 (%)":   curr_weight * 100,
+                    "목표 비중 (%)":   target_weight * 100,
+                    "비중 차이 (%)":   (target_weight - curr_weight) * 100,
+                    "조정 수량":       diff_shares,
+                    "조정 금액 (KRW)": diff_krw,
+                })
+
+            df_rb = pd.DataFrame(rows_rb)
+
+            rb_col_cfg = {
+                "현재가 (USD)":    st.column_config.NumberColumn(format="$%.2f"),
+                "보유 수량":       st.column_config.NumberColumn(format="%.4f"),
+                "현재 비중 (%)":   st.column_config.NumberColumn(format="%.1f%%"),
+                "목표 비중 (%)":   st.column_config.NumberColumn(format="%.1f%%"),
+                "비중 차이 (%)":   st.column_config.NumberColumn(format="%+.1f%%"),
+                "조정 수량":       st.column_config.NumberColumn(format="%+.4f"),
+                "조정 금액 (KRW)": st.column_config.NumberColumn(format="₩%.0f"),
+            }
+
+            st.markdown('<div class="section-label">종목별 리밸런싱 내역</div>', unsafe_allow_html=True)
+            st.dataframe(df_rb, column_config=rb_col_cfg, width="stretch", hide_index=True)
+
+            # ── 매도 / 매수 분리 요약 ─────────────────────────────
+            sell_df = df_rb[df_rb["조정 수량"] < -0.0001].copy()
+            buy_df  = df_rb[df_rb["조정 수량"] >  0.0001].copy()
+
+            col_sell, col_buy = st.columns(2)
+            with col_sell:
+                st.markdown('<div class="section-label">📤 매도 대상 (초과 보유)</div>', unsafe_allow_html=True)
+                if sell_df.empty:
+                    st.markdown('<div class="success-banner">✅ 매도 필요 종목 없음</div>', unsafe_allow_html=True)
+                else:
+                    total_sell_krw = sell_df["조정 금액 (KRW)"].sum()
+                    for _, row in sell_df.iterrows():
+                        st.markdown(
+                            f'<div class="warn-banner">'
+                            f'<b>{row["티커"]}</b> — {row["조정 수량"]:+.4f}주 매도'
+                            f'<br><span style="font-size:0.78rem">≈ ₩{row["조정 금액 (KRW)"]:,.0f} '
+                            f'(현재 {row["현재 비중 (%)"]:.1f}% → 목표 {row["목표 비중 (%)"]:.1f}%)</span>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+                    st.markdown(
+                        f'<div class="warn-banner" style="border-color:#c0392b">'
+                        f'<b>총 매도 금액: ₩{total_sell_krw:,.0f}</b></div>',
+                        unsafe_allow_html=True,
+                    )
+
+            with col_buy:
+                st.markdown('<div class="section-label">📥 매수 대상 (비중 부족)</div>', unsafe_allow_html=True)
+                if buy_df.empty:
+                    st.markdown('<div class="success-banner">✅ 매수 필요 종목 없음</div>', unsafe_allow_html=True)
+                else:
+                    total_buy_krw = buy_df["조정 금액 (KRW)"].sum()
+                    for _, row in buy_df.iterrows():
+                        st.markdown(
+                            f'<div class="success-banner">'
+                            f'<b>{row["티커"]}</b> — {row["조정 수량"]:+.4f}주 매수'
+                            f'<br><span style="font-size:0.78rem">≈ ₩{row["조정 금액 (KRW)"]:,.0f} '
+                            f'(현재 {row["현재 비중 (%)"]:.1f}% → 목표 {row["목표 비중 (%)"]:.1f}%)</span>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+                    st.markdown(
+                        f'<div class="success-banner" style="border-color:#27ae60">'
+                        f'<b>총 매수 금액: ₩{total_buy_krw:,.0f}</b></div>',
+                        unsafe_allow_html=True,
+                    )
+
+            # ── 파이차트: 현재 vs 목표 비중 ──────────────────────
+            st.markdown('<div class="section-label">현재 비중 vs 목표 비중</div>', unsafe_allow_html=True)
+            chart_colors = [
+                "#3949ab","#1e88e5","#00acc1","#43a047",
+                "#fb8c00","#e53935","#8e24aa","#00897b","#f4511e","#6d4c41",
+                "#546e7a","#78909c","#c0ca33","#26a69a","#ec407a",
+            ]
+            fig_rb = go.Figure()
+            fig_rb.add_trace(go.Pie(
+                labels=df_rb["티커"],
+                values=df_rb["현재 비중 (%)"].clip(lower=0),
+                name="현재", hole=0.45,
+                textinfo="percent",
+                texttemplate="%{percent:.1%}",
+                textposition="inside",
+                insidetextorientation="radial",
+                domain={"x": [0, 0.46]},
+                marker=dict(colors=chart_colors[:len(df_rb)]),
+                title=dict(text="현재 비중", font=dict(color="#e0e0e0", size=12)),
+            ))
+            fig_rb.add_trace(go.Pie(
+                labels=df_rb["티커"],
+                values=df_rb["목표 비중 (%)"].clip(lower=0),
+                name="목표", hole=0.45,
+                textinfo="percent",
+                texttemplate="%{percent:.1%}",
+                textposition="inside",
+                insidetextorientation="radial",
+                domain={"x": [0.54, 1.0]},
+                marker=dict(colors=chart_colors[:len(df_rb)]),
+                title=dict(text="목표 비중", font=dict(color="#e0e0e0", size=12)),
+            ))
+            fig_rb.update_layout(
+                paper_bgcolor="#1a1f2e", plot_bgcolor="#1a1f2e",
+                font_color="#e0e0e0",
+                margin=dict(t=30, b=10, l=10, r=10),
+                height=360,
+                showlegend=True,
+                legend=dict(orientation="v", x=1.02, y=0.5,
+                            font=dict(color="#e0e0e0", size=11), bgcolor="rgba(0,0,0,0)"),
+            )
+            st.plotly_chart(fig_rb, width="stretch", key="rb_pie_chart")
+
+            st.caption(
+                "📌 조정 수량이 양수(+)이면 매수, 음수(-)이면 매도를 의미합니다. "
+                "Top N 이외 종목의 목표 비중은 0%입니다."
+            )
+
+# ══════════════════════════════════════════════
+# 탭 5 : 설정
+# ══════════════════════════════════════════════
+
+with tab5:
     st.markdown('<div class="section-label">투자 설정</div>', unsafe_allow_html=True)
 
     col_s1, col_s2 = st.columns(2)
