@@ -73,7 +73,7 @@ def fmt_xirr(v: float) -> str:
 # 페이지 설정
 # ─────────────────────────────────────────────
 
-_icon = Image.open(Path(__file__).parent / "static" / "assets" / "icon.png")
+_icon = Image.open(Path(__file__).parent / "assets" / "icon.png")
 _icon = _icon.resize((64, 64))
 
 st.set_page_config(
@@ -82,11 +82,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-st.markdown("""
-    <link rel="apple-touch-icon" href="/app/static/assets/apple-touch-icon.png">
-    <link rel="manifest" href="/app/static/assets/manifest.json">
-""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 # CSS
