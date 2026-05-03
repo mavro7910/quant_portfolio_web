@@ -36,8 +36,16 @@ def _get_supabase():
 # ─────────────────────────────────────────────
 
 _DEFAULTS = {
-    "holdings": {},
-    "weekly_budget": 500_000,
+    "holdings": {
+        "AAPL": 0.0,
+        "MSFT": 0.0,
+        "NVDA": 0.0,
+        "AMZN": 0.0,
+        "GOOGL": 0.0,
+        "META": 0.0,
+        "TSLA": 0.0,
+    },
+    "weekly_budget": 100_000,
     "benchmarks": ["QQQM", "SPY"],
 }
 
