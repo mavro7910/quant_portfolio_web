@@ -29,6 +29,8 @@ from core.strategy import (
     BENCHMARKS,
 )
 
+from PIL import Image
+
 # ─────────────────────────────────────────────
 # 유틸 함수
 # ─────────────────────────────────────────────
@@ -71,12 +73,20 @@ def fmt_xirr(v: float) -> str:
 # 페이지 설정
 # ─────────────────────────────────────────────
 
+_icon = Image.open(Path(__file__).parent / "static" / "assets" / "icon.png")
+_icon = _icon.resize((64, 64))
+
 st.set_page_config(
     page_title="Quant Portfolio Manager",
-    page_icon="📊",
+    page_icon=_icon,
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+st.markdown("""
+    <link rel="apple-touch-icon" href="/app/static/assets/apple-touch-icon.png">
+    <link rel="manifest" href="/app/static/assets/manifest.json">
+""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 # CSS
