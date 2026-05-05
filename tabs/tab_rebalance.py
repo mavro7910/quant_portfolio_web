@@ -32,7 +32,7 @@ def render(portfolio: Portfolio):
             "비중 산출 종목 수 (Top N)",
             min_value=1,
             max_value=len(portfolio.tickers()),
-            value=min(10, len(portfolio.tickers())),
+            value=min(15, len(portfolio.tickers())),
             step=1,
             key="rb_topn",
         )
