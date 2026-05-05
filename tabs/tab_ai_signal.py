@@ -19,11 +19,10 @@ import streamlit.components.v1 as components
 from core.portfolio import Portfolio
 from utils.ai_client import (
     analyze_portfolio_signals,
-    get_api_key,
-    has_api_key,
-    set_api_key,
+    get_api_key, has_api_key, set_api_key,
+    get_finnhub_key, set_finnhub_key, has_finnhub_key,
 )
-from core.secrets_store import load_api_key, load_signal_cache, save_signal_cache
+from core.secrets_store import load_api_key, load_signal_cache, save_signal_cache, load_finnhub_key
 
 
 # ─────────────────────────────────────────────
@@ -56,12 +55,36 @@ def _set_cached(uid: str, data: list):
 
 def render(portfolio: Portfolio, file_key: str):
     # Supabase에서 키 자동 로드 (세션에 없을 때)
+    if not has_finnhub_key():
+        stored_fh, _ = load_finnhub_key(file_key)
+        if stored_fh:
+            set_finnhub_key(stored_fh)
+
     if not has_api_key():
         stored, err = load_api_key(file_key)
         if stored:
             set_api_key(stored)
-        elif err and "permission" not in str(err).lower():
-            st.warning(f"키 자동 로드 실패: {err}")
+        else:
+            col_key, col_keybtn = st.columns([4, 1])
+            with col_key:
+                if err:
+                    st.warning(f"키 자동 로드 실패: {err}")
+                else:
+                    st.markdown(
+                        '<div class="warn-banner">🔑 API 키가 없습니다. 설정 탭에서 등록하거나 불러오세요.</div>',
+                        unsafe_allow_html=True,
+                    )
+            with col_keybtn:
+                st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
+                if st.button("🔑 키 불러오기", key="btn_load_key", use_container_width=True):
+                    stored2, err2 = load_api_key(file_key)
+                    if stored2:
+                        set_api_key(stored2)
+                        st.rerun()
+                    elif err2:
+                        st.error(f"불러오기 실패: {err2}")
+                    else:
+                        st.error("저장된 키가 없습니다. 설정 탭에서 등록하세요.")
 
     if not portfolio.tickers():
         st.markdown(
@@ -70,11 +93,20 @@ def render(portfolio: Portfolio, file_key: str):
         )
         return
 
+    # 수량 0 초과 종목 체크
+    active_holdings = {t: s for t, s in portfolio.holdings.items() if s > 0}
+    if not active_holdings:
+        st.markdown(
+            '<div class="warn-banner">⚠️ 보유 중인 종목이 없어요. 포트폴리오 탭에서 수량을 입력해주세요.</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
     if not has_api_key():
         st.markdown(
             '<div class="warn-banner">'
             '🔑 <b>Gemini API 키가 필요합니다.</b><br>'
-            '설정 탭에서 API 키를 입력하거나 .env 파일을 업로드하세요.<br>'
+            '설정 탭에서 API 키를 입력하세요.<br>'
             '<a href="https://aistudio.google.com/app/apikey" target="_blank" '
             'style="color:#f0a862">Google AI Studio에서 무료 발급 →</a>'
             '</div>',
@@ -97,11 +129,12 @@ def render(portfolio: Portfolio, file_key: str):
             unsafe_allow_html=True,
         )
     else:
+        active_count = len([t for t, s in portfolio.holdings.items() if s > 0])
         st.markdown(
             f'<div class="info-banner">'
-            f'📡 보유 {ticker_count}개 종목의 최신 뉴스를 AI가 분석합니다.<br>'
+            f'📡 보유 수량이 있는 <b>{active_count}개 종목</b>의 최신 뉴스를 AI가 분석합니다.<br>'
             f'<span style="font-size:0.8rem;color:#5c6f99">'
-            f'병렬 처리 · 분석 결과는 Supabase에 저장됩니다</span>'
+            f'분석 완료 후 결과가 저장됩니다</span>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -137,36 +170,49 @@ def render(portfolio: Portfolio, file_key: str):
 # ─────────────────────────────────────────────
 
 def _run_analysis(portfolio: Portfolio, file_key: str):
-    api_key = get_api_key()
-    holdings = portfolio.holdings
+    api_key      = get_api_key()
+    holdings     = {t: s for t, s in portfolio.holdings.items() if s > 0}
+    tickers_list = list(holdings.keys())
+    total        = len(tickers_list)
 
-    progress_bar  = st.progress(0)
-    status_text   = st.empty()
+    progress_bar = st.progress(0)
+    status_text  = st.empty()
+    partial_area = st.empty()
+    partial_results = []
 
-    def on_progress(current, total, ticker):
+    def on_progress(current, total, ticker, item):
         pct = int(current / total * 100) if total > 0 else 0
         progress_bar.progress(pct)
-        if ticker == "완료":
-            status_text.caption("✅ 분석 완료!")
-        else:
-            status_text.caption(f"분석 중... {ticker} ({current + 1}/{total})")
 
-    with st.spinner(""):
+        if item is not None:
+            status_text.markdown(f"✅ **{ticker}** 분석 완료 ({current}/{total})")
+        elif ticker == "데이터 수집 중":
+            status_text.markdown(
+                f"📡 {'Finnhub' if has_finnhub_key() else 'yfinance'}으로 **{total}개 종목** 데이터 수집 중..."
+            )
+        else:
+            status_text.markdown(
+                f"🤖 **{ticker}** AI 분석 중... ({current + 1}/{total})"
+            )
+
+    try:
         results = analyze_portfolio_signals(
             holdings=holdings,
             api_key=api_key,
+            finnhub_key=get_finnhub_key(),
             progress_callback=on_progress,
         )
+    except Exception as e:
+        progress_bar.empty()
+        status_text.empty()
+        st.error(f"❌ 분석 오류: {e}")
+        return
 
-    progress_bar.empty()
+    progress_bar.progress(100)
+    status_text.markdown(f"✅ **분석 완료!** {total}개 종목")
 
-    # 에러 있는 종목 화면에 표시
-    errors = [(r["ticker"], r["signal"]["_error"]) for r in results if r.get("signal") and r["signal"].get("_error")]
-    if errors:
-        for ticker, err in errors:
-            st.error(f"{ticker} 분석 실패: {err}")
-
-    _set_cached(file_key, results)
+    if results:
+        _set_cached(file_key, results)
     st.rerun()
 
 

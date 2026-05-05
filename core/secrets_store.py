@@ -1,8 +1,9 @@
 """
 core/secrets_store.py
 
-- API 키: AES-256-GCM 암호화 → user_secrets 테이블
-- 시그널 캐시: signal_cache 테이블 (날짜별 저장)
+- API 키들: AES-256-GCM 암호화 → user_secrets 테이블
+  저장 형식: {"gemini": "AIza...", "finnhub": "d1abc..."}
+- 시그널 캐시: signal_cache 테이블 (날짜별)
 """
 
 from __future__ import annotations
@@ -48,40 +49,32 @@ def _get_supabase():
         key = st.secrets["SUPABASE_KEY"]
         from supabase import create_client
         return create_client(url, key)
-    except Exception:
-        return None
+    except KeyError as e:
+        raise RuntimeError(f"st.secrets에 {e} 키가 없습니다.")
+    except Exception as e:
+        raise RuntimeError(f"Supabase 연결 실패: {e}")
 
 
 # ─────────────────────────────────────────────
-# API 키 (user_secrets 테이블)
+# 내부: 키 dict 로드/저장
 # ─────────────────────────────────────────────
 
-def load_api_key(uid: str) -> tuple[str | None, str | None]:
-    """
-    복호화된 키, 에러메시지 반환.
-    성공: (key, None) / 실패: (None, error_msg)
-    """
-    sb = _get_supabase()
-    if not sb:
-        return None, "Supabase 미연결"
+def _load_keys_dict(uid: str) -> tuple[dict, str | None]:
     try:
+        sb = _get_supabase()
         res = sb.table("user_secrets").select("s").eq("uid", uid).execute()
         if res.data:
-            return _decrypt(res.data[0]["s"], uid), None
-        return None, None  # 저장된 키 없음
+            decrypted = _decrypt(res.data[0]["s"], uid)
+            return json.loads(decrypted), None
+        return {}, None
     except Exception as e:
-        return None, str(e)
+        return {}, str(e)
 
 
-def save_api_key(uid: str, raw_key: str) -> tuple[bool, str | None]:
-    """
-    성공: (True, None) / 실패: (False, error_msg)
-    """
-    sb = _get_supabase()
-    if not sb:
-        return False, "Supabase 미연결 — st.secrets에 SUPABASE_URL/KEY 확인"
+def _save_keys_dict(uid: str, keys: dict) -> tuple[bool, str | None]:
     try:
-        encrypted = _encrypt(raw_key, uid)
+        sb = _get_supabase()
+        encrypted = _encrypt(json.dumps(keys), uid)
         sb.table("user_secrets").upsert(
             {"uid": uid, "s": encrypted},
             on_conflict="uid",
@@ -91,30 +84,51 @@ def save_api_key(uid: str, raw_key: str) -> tuple[bool, str | None]:
         return False, str(e)
 
 
-def delete_api_key(uid: str) -> tuple[bool, str | None]:
-    sb = _get_supabase()
-    if not sb:
-        return False, "Supabase 미연결"
-    try:
-        sb.table("user_secrets").delete().eq("uid", uid).execute()
-        return True, None
-    except Exception as e:
-        return False, str(e)
+# ─────────────────────────────────────────────
+# Gemini 키
+# ─────────────────────────────────────────────
+
+def load_gemini_key(uid: str) -> tuple[str | None, str | None]:
+    keys, err = _load_keys_dict(uid)
+    return keys.get("gemini"), err
+
+def save_gemini_key(uid: str, key: str) -> tuple[bool, str | None]:
+    keys, _ = _load_keys_dict(uid)
+    keys["gemini"] = key
+    return _save_keys_dict(uid, keys)
+
+def delete_gemini_key(uid: str) -> tuple[bool, str | None]:
+    keys, _ = _load_keys_dict(uid)
+    keys.pop("gemini", None)
+    return _save_keys_dict(uid, keys)
 
 
 # ─────────────────────────────────────────────
-# 시그널 캐시 (signal_cache 테이블)
+# Finnhub 키
+# ─────────────────────────────────────────────
+
+def load_finnhub_key(uid: str) -> tuple[str | None, str | None]:
+    keys, err = _load_keys_dict(uid)
+    return keys.get("finnhub"), err
+
+def save_finnhub_key(uid: str, key: str) -> tuple[bool, str | None]:
+    keys, _ = _load_keys_dict(uid)
+    keys["finnhub"] = key
+    return _save_keys_dict(uid, keys)
+
+def delete_finnhub_key(uid: str) -> tuple[bool, str | None]:
+    keys, _ = _load_keys_dict(uid)
+    keys.pop("finnhub", None)
+    return _save_keys_dict(uid, keys)
+
+
+# ─────────────────────────────────────────────
+# 시그널 캐시
 # ─────────────────────────────────────────────
 
 def load_signal_cache(uid: str) -> tuple[list | None, str | None]:
-    """
-    오늘 날짜 캐시 로드.
-    성공: (data, None) / 없음: (None, None) / 실패: (None, error_msg)
-    """
-    sb = _get_supabase()
-    if not sb:
-        return None, "Supabase 미연결"
     try:
+        sb = _get_supabase()
         today = date.today().isoformat()
         res = (
             sb.table("signal_cache")
@@ -131,13 +145,8 @@ def load_signal_cache(uid: str) -> tuple[list | None, str | None]:
 
 
 def save_signal_cache(uid: str, data: list) -> tuple[bool, str | None]:
-    """
-    오늘 날짜로 분석 결과 저장.
-    """
-    sb = _get_supabase()
-    if not sb:
-        return False, "Supabase 미연결"
     try:
+        sb = _get_supabase()
         today = date.today().isoformat()
         sb.table("signal_cache").upsert(
             {"uid": uid, "cache_date": today, "data": data},
@@ -146,3 +155,17 @@ def save_signal_cache(uid: str, data: list) -> tuple[bool, str | None]:
         return True, None
     except Exception as e:
         return False, str(e)
+
+
+# ─────────────────────────────────────────────
+# 하위 호환 (기존 코드용)
+# ─────────────────────────────────────────────
+
+def load_api_key(uid: str) -> tuple[str | None, str | None]:
+    return load_gemini_key(uid)
+
+def save_api_key(uid: str, key: str) -> tuple[bool, str | None]:
+    return save_gemini_key(uid, key)
+
+def delete_api_key(uid: str) -> tuple[bool, str | None]:
+    return delete_gemini_key(uid)

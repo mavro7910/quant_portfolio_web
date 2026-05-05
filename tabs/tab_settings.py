@@ -4,8 +4,14 @@ import json
 import streamlit as st
 
 from core.portfolio import Portfolio
-from core.secrets_store import load_api_key, save_api_key, delete_api_key
-from utils.ai_client import set_api_key, get_api_key, has_api_key, clear_api_key, validate_api_key
+from core.secrets_store import (
+    load_api_key, save_api_key, delete_api_key,
+    load_finnhub_key, save_finnhub_key, delete_finnhub_key,
+)
+from utils.ai_client import (
+    set_api_key, get_api_key, has_api_key, clear_api_key, validate_api_key,
+    set_finnhub_key, get_finnhub_key, has_finnhub_key, clear_finnhub_key, validate_finnhub_key,
+)
 
 
 def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str):
@@ -55,6 +61,23 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
             portfolio.save()
             st.success("✅ 설정이 저장되었습니다!")
 
+    # ── Supabase 연결 테스트 (레거시 - 숨김) ──────────────────────────
+    if st.session_state.get("_show_debug"):
+        st.markdown('<div class="section-label">Supabase 연결 테스트</div>', unsafe_allow_html=True)
+        if st.button("🔌 연결 테스트", key="btn_test_supabase"):
+            try:
+                from supabase import create_client
+                import streamlit as st_inner
+                url = st_inner.secrets["SUPABASE_URL"]
+                key = st_inner.secrets["SUPABASE_KEY"]
+                sb = create_client(url, key)
+                res = sb.table("user_secrets").select("uid").limit(1).execute()
+                st.success(f"✅ Supabase 연결 성공!")
+            except KeyError as e:
+                st.error(f"❌ secrets에 {e} 없음")
+            except Exception as e:
+                st.error(f"❌ 연결 실패: {e}")
+
     # ── 계정 정보 ──────────────────────────────────────────────────
     st.markdown('<div class="section-label">계정 정보</div>', unsafe_allow_html=True)
     st.markdown(f"""
@@ -64,8 +87,16 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
 </div>
 """, unsafe_allow_html=True)
 
-    # ── Gemini API 키 ──────────────────────────────────────────────
-    st.markdown('<div class="section-label">🤖 AI 시그널 — Gemini API 키</div>', unsafe_allow_html=True)
+    # ── AI API 키 ──────────────────────────────────────────────────
+    st.markdown('<div class="section-label">🤖 AI 시그널 API 키</div>', unsafe_allow_html=True)
+
+    # 저장 결과 메시지
+    if "key_save_msg" in st.session_state:
+        msg_type, msg_text = st.session_state.pop("key_save_msg")
+        if msg_type == "success":
+            st.success(msg_text)
+        else:
+            st.error(msg_text)
 
     # 세션에 키 없으면 Supabase에서 자동 로드
     if not has_api_key():
@@ -73,63 +104,106 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
         if stored_key:
             set_api_key(stored_key)
         elif err:
-            st.warning(f"키 자동 로드 실패: {err}")
+            st.warning(f"Gemini 키 자동 로드 실패: {err}")
 
-    # 현재 키 상태 표시
-    if has_api_key():
-        masked = "●●●●●●●●" + get_api_key()[-4:]
-        col_status, col_del = st.columns([4, 1])
-        with col_status:
-            st.markdown(
-                f'<div class="success-banner">✅ API 키 등록됨 &nbsp; <code>{masked}</code></div>',
-                unsafe_allow_html=True,
-            )
-        with col_del:
-            st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
-            if st.button("🗑️ 삭제", key="btn_del_key"):
-                clear_api_key()
-                ok, err = delete_api_key(file_key)
-                if not ok:
-                    st.warning(f"Supabase 삭제 실패: {err}")
-                st.rerun()
-    else:
-        # 키 입력 폼
-        new_key = st.text_input(
-            "Gemini API 키 입력",
+    if not has_finnhub_key():
+        stored_fh, _ = load_finnhub_key(file_key)
+        if stored_fh:
+            set_finnhub_key(stored_fh)
+
+    # 현재 상태 표시
+    col_g, col_f = st.columns(2)
+    with col_g:
+        if has_api_key():
+            masked = "●●●●" + get_api_key()[-4:]
+            st.markdown(f'<div class="success-banner">✅ Gemini <code>{masked}</code></div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="warn-banner">⚠️ Gemini 키 없음</div>', unsafe_allow_html=True)
+    with col_f:
+        if has_finnhub_key():
+            masked_fh = "●●●●" + get_finnhub_key()[-4:]
+            st.markdown(f'<div class="success-banner">✅ Finnhub <code>{masked_fh}</code></div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="warn-banner">⚠️ Finnhub 키 없음</div>', unsafe_allow_html=True)
+
+    # 입력 폼
+    col_k1, col_k2 = st.columns(2)
+    with col_k1:
+        new_gemini = st.text_input(
+            "Gemini API 키",
             type="password",
             placeholder="AIza...",
-            help="Google AI Studio (aistudio.google.com) 에서 무료 발급",
+            help="aistudio.google.com 에서 무료 발급",
+            key="inp_gemini_key",
+        )
+    with col_k2:
+        new_finnhub = st.text_input(
+            "Finnhub API 키",
+            type="password",
+            placeholder="d1abc123...",
+            help="finnhub.io/register 에서 무료 발급",
+            key="inp_finnhub_key",
         )
 
-        if st.button("✅ 검증 후 저장", key="btn_save_key"):
-            if not new_key.strip():
-                st.error("API 키를 입력하세요.")
-            else:
-                with st.spinner("키 검증 중..."):
-                    valid, err = validate_api_key(new_key.strip())
+    col_save, col_del = st.columns([3, 1])
+    with col_save:
+        if st.button("✅ 검증 후 저장", key="btn_save_keys", use_container_width=True):
+            errors = []
+            saved  = []
+
+            if new_gemini.strip():
+                valid, err = validate_api_key(new_gemini.strip())
                 if valid:
-                    set_api_key(new_key.strip())
-                    ok, save_err = save_api_key(file_key, new_key.strip())
+                    set_api_key(new_gemini.strip())
+                    ok, save_err = save_api_key(file_key, new_gemini.strip())
                     if ok:
-                        st.success("✅ 키 검증 완료, 암호화 저장되었습니다.")
+                        saved.append("Gemini")
                     else:
-                        st.warning(f"✅ 키는 유효하지만 저장 실패 (세션 중 유지): {save_err}")
-                    st.rerun()
+                        errors.append(f"Gemini 저장 실패: {save_err}")
                 else:
-                    st.error(f"❌ 유효하지 않은 키: {err}")
+                    errors.append(f"Gemini: {err}")
 
-        st.markdown(
-            '<div class="info-banner">'
-            '🔒 <b>보안 안내</b><br>'
-            '· 키 검증 후 AES-256으로 암호화되어 저장됩니다<br>'
-            '· 관리자도 평문 키를 직접 볼 수 없습니다<br>'
-            '· <a href="https://aistudio.google.com/app/apikey" target="_blank" '
-            'style="color:#90caf9">Google AI Studio</a>에서 무료로 발급하세요'
-            '</div>',
-            unsafe_allow_html=True,
-        )
+            if new_finnhub.strip():
+                valid_fh, err_fh = validate_finnhub_key(new_finnhub.strip())
+                if valid_fh:
+                    set_finnhub_key(new_finnhub.strip())
+                    ok_fh, save_err_fh = save_finnhub_key(file_key, new_finnhub.strip())
+                    if ok_fh:
+                        saved.append("Finnhub")
+                    else:
+                        errors.append(f"Finnhub 저장 실패: {save_err_fh}")
+                else:
+                    errors.append(f"Finnhub: {err_fh}")
 
-    # ── JSON 내보내기/불러오기 ──────────────────────────────────────
+            if not new_gemini.strip() and not new_finnhub.strip():
+                st.error("키를 하나 이상 입력하세요.")
+            else:
+                if saved:
+                    st.session_state["key_save_msg"] = ("success", f"✅ {', '.join(saved)} 키 저장 완료!")
+                if errors:
+                    st.session_state["key_save_msg"] = ("error", "\n".join(errors))
+                st.rerun()
+
+    with col_del:
+        if has_api_key() or has_finnhub_key():
+            if st.button("🗑️ 전체 삭제", key="btn_del_keys", use_container_width=True):
+                clear_api_key()
+                clear_finnhub_key()
+                delete_api_key(file_key)
+                delete_finnhub_key(file_key)
+                st.rerun()
+
+    st.markdown(
+        '<div class="info-banner">'
+        '🔒 키는 암호화되어 안전하게 저장됩니다. 관리자도 원문을 볼 수 없어요.<br>'
+        '· <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#90caf9">Gemini 발급</a>'
+        ' &nbsp;·&nbsp; '
+        '<a href="https://finnhub.io/register" target="_blank" style="color:#90caf9">Finnhub 발급</a>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── JSON 내보내기/불러오기    # ── JSON 내보내기/불러오기 ──────────────────────────────────────
     st.markdown('<div class="section-label">포트폴리오 JSON 내보내기</div>', unsafe_allow_html=True)
     json_str = json.dumps(portfolio._data, ensure_ascii=False, indent=2)
     st.download_button(
