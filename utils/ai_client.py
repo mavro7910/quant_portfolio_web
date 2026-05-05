@@ -259,6 +259,7 @@ def analyze_portfolio_signals(
     api_key: str,
     finnhub_key: str | None = None,
     progress_callback=None,
+    portfolio=None,
 ) -> list[dict]:
 
     holdings = {t: s for t, s in holdings.items() if s > 0}
@@ -313,6 +314,7 @@ def analyze_portfolio_signals(
             "change_pct":    change_pct,
             "headlines":     headlines,
             "signal":        sig,
+            "logo_url":      portfolio.get_logo(ticker) if portfolio else None,
             "analyzed_date": today,
         }
         results.append(item)

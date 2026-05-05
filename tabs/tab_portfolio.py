@@ -5,6 +5,7 @@ import streamlit as st
 
 from core.data import fetch_prices_and_fx
 from core.portfolio import Portfolio
+from utils.ai_client import get_finnhub_key, has_finnhub_key
 
 
 def render(portfolio: Portfolio):
@@ -96,13 +97,42 @@ def render(portfolio: Portfolio):
         if st.button("🔍 종목명 조회", key="btn_names"):
             with st.spinner("종목명 가져오는 중..."):
                 import yfinance as yf
+                import requests
                 names = {}
+                finnhub_key = get_finnhub_key() if has_finnhub_key() else None
+
                 for t in portfolio.tickers():
-                    try:
-                        info = yf.Ticker(t).info
-                        names[t] = info.get("longName") or info.get("shortName") or t
-                    except Exception:
-                        names[t] = t
+                    name = None
+
+                    # Finnhub 우선 (빠르고 정확) — 이름 + 로고 동시
+                    if finnhub_key:
+                        try:
+                            r = requests.get(
+                                "https://finnhub.io/api/v1/stock/profile2",
+                                params={"symbol": t},
+                                headers={"X-Finnhub-Token": finnhub_key},
+                                timeout=5,
+                            )
+                            profile = r.json()
+                            name = profile.get("name") or None
+                            logo = profile.get("logo") or None
+                            if logo:
+                                portfolio.set_logo(t, logo)
+                        except Exception:
+                            pass
+
+                    # yfinance fallback
+                    if not name:
+                        try:
+                            info = yf.Ticker(t).info
+                            name = info.get("longName") or info.get("shortName") or None
+                        except Exception:
+                            pass
+
+                    names[t] = name or t
+
+                if finnhub_key:
+                    portfolio.save()
                 st.session_state["ticker_names"] = names
 
     if fx_est:

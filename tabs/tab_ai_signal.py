@@ -203,6 +203,7 @@ def _run_analysis(portfolio: Portfolio, file_key: str):
             api_key=api_key,
             finnhub_key=get_finnhub_key(),
             progress_callback=on_progress,
+            portfolio=portfolio,
         )
     except Exception as e:
         progress_bar.empty()
@@ -413,6 +414,18 @@ function tickerColor(ticker, idx) {{
   return map[ticker] || COLORS[idx % COLORS.length];
 }}
 
+function tickerIconHtml(ticker, idx, logoUrl) {{
+  const color = tickerColor(ticker, idx);
+  if (logoUrl) {{
+    return `<div class="ticker-icon" style="background:#1a1f2e;overflow:hidden">
+      <img src="${{logoUrl}}" alt="${{ticker}}"
+           style="width:100%;height:100%;object-fit:contain;padding:5px;"
+           onerror="this.parentElement.style.background='${{color}}';this.parentElement.innerHTML='${{ticker.slice(0,2)}}'">
+    </div>`;
+  }}
+  return `<div class="ticker-icon" style="background:${{color}}">${{ticker.slice(0,2)}}</div>`;
+}}
+
 let currentFilter = "all";
 let openTicker    = null;
 
@@ -462,6 +475,7 @@ function renderList() {{
     const arrow      = sigClass === "up" ? "▲" : sigClass === "down" ? "▼" : "—";
     const reason     = item.signal?.reason || "분석 정보 없음";
     const color      = tickerColor(ticker, i);
+    const logoUrl    = item.logo_url || null;
     const isOpen     = openTicker === ticker;
 
     const detail     = isOpen ? renderDetail(item, color) : "";
@@ -471,7 +485,7 @@ function renderList() {{
         <div class="signal-card ${{sigClass}} ${{isOpen ? "open" : ""}}"
              onclick="toggleDetail('${{ticker}}')"
              style="border-radius: ${{isOpen ? "14px 14px 0 0" : "14px"}}">
-          <div class="ticker-icon" style="background:${{color}}">${{ticker.slice(0,2)}}</div>
+          ${{tickerIconHtml(ticker, i, logoUrl)}}
           <div class="card-content">
             <div class="card-top">
               <span class="ticker-name">${{ticker}}<span class="ticker-sub">${{item.shares?.toFixed(2)}}주</span></span>

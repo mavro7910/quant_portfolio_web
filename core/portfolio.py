@@ -165,3 +165,16 @@ class Portfolio:
 
     def set_setting(self, key: str, value):
         self.settings[key] = value
+
+    # ── 로고 캐시 ──────────────────────────────────────────────────
+
+    @property
+    def logos(self) -> dict:
+        return self._data.setdefault("logos", {})
+
+    def get_logo(self, ticker: str) -> str | None:
+        return self.logos.get(ticker)
+
+    def set_logo(self, ticker: str, url: str | None):
+        if url:
+            self.logos[ticker] = url
