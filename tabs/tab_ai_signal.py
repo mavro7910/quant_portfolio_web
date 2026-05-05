@@ -119,12 +119,14 @@ def render(portfolio: Portfolio, file_key: str):
     ticker_count = len(portfolio.tickers())
 
     if cached:
-        # 가장 최근 분석 날짜 표시
-        analyzed_date = cached[0].get("analyzed_date", "알 수 없음") if cached else "-"
+        analyzed_count = len(cached)
+        analyzed_date  = cached[0].get("analyzed_date", "-") if cached else "-"
+        analyzed_time  = cached[0].get("analyzed_time", "") if cached else ""
+        time_str = f" {analyzed_time}" if analyzed_time else ""
         st.markdown(
             f'<div class="success-banner">'
-            f'✅ 분석 결과 로드됨 · {ticker_count}개 종목 · '
-            f'<b>{analyzed_date}</b> 기준'
+            f'✅ 분석 결과 로드됨 · <b>{analyzed_count}개 종목</b> · '
+            f'{analyzed_date}{time_str} 기준'
             f'</div>',
             unsafe_allow_html=True,
         )

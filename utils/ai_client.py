@@ -265,7 +265,9 @@ def analyze_portfolio_signals(
     holdings = {t: s for t, s in holdings.items() if s > 0}
     tickers  = list(holdings.keys())
     total    = len(tickers)
-    today    = date.today().isoformat()
+    from datetime import datetime
+    today     = date.today().isoformat()
+    now_time  = datetime.now().strftime("%H:%M")
 
     # 1단계: 병렬 데이터 수집
     if progress_callback:
@@ -316,6 +318,7 @@ def analyze_portfolio_signals(
             "signal":        sig,
             "logo_url":      portfolio.get_logo(ticker) if portfolio else None,
             "analyzed_date": today,
+            "analyzed_time": now_time,
         }
         results.append(item)
         if progress_callback:
