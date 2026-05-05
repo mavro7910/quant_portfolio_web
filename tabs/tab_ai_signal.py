@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date
+# date, datetime, timedelta를 가져옵니다.
+from datetime import date, datetime, timedelta
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -26,15 +27,25 @@ from core.secrets_store import load_api_key, load_signal_cache, save_signal_cach
 
 
 # ─────────────────────────────────────────────
+# 헬퍼 함수: 한국 시간 생성
+# ─────────────────────────────────────────────
+def get_kst_now():
+    """서버(UTC) 시간에 9시간을 더해 한국 시간을 반환"""
+    return datetime.utcnow() + timedelta(hours=9)
+
+
+# ─────────────────────────────────────────────
 # 캐시 (Supabase + session_state 이중화)
 # ─────────────────────────────────────────────
 
 def _get_cached(uid: str) -> list | None:
-    # 1. 세션에 있으면 바로 반환
-    key = f"signal_cache_{date.today().isoformat()}"
+    # date.today() 대신 한국 시간 기준 날짜로 키 생성
+    kst_today = get_kst_now().date().isoformat()
+    key = f"signal_cache_{kst_today}"
+    
     if key in st.session_state:
         return st.session_state[key]
-    # 2. Supabase에서 오늘 캐시 로드
+    
     data, err = load_signal_cache(uid)
     if data:
         st.session_state[key] = data
@@ -42,7 +53,10 @@ def _get_cached(uid: str) -> list | None:
 
 
 def _set_cached(uid: str, data: list):
-    key = f"signal_cache_{date.today().isoformat()}"
+    # 저장할 때도 한국 시간 기준 날짜로 키 생성
+    kst_today = get_kst_now().date().isoformat()
+    key = f"signal_cache_{kst_today}"
+    
     st.session_state[key] = data
     ok, err = save_signal_cache(uid, data)
     if not ok:
@@ -54,7 +68,6 @@ def _set_cached(uid: str, data: list):
 # ─────────────────────────────────────────────
 
 def render(portfolio: Portfolio, file_key: str):
-    # Supabase에서 키 자동 로드 (세션에 없을 때)
     if not has_finnhub_key():
         stored_fh, _ = load_finnhub_key(file_key)
         if stored_fh:
@@ -93,7 +106,6 @@ def render(portfolio: Portfolio, file_key: str):
         )
         return
 
-    # 수량 0 초과 종목 체크
     active_holdings = {t: s for t, s in portfolio.holdings.items() if s > 0}
     if not active_holdings:
         st.markdown(
@@ -115,11 +127,11 @@ def render(portfolio: Portfolio, file_key: str):
         return
 
     cached = _get_cached(file_key)
-
     ticker_count = len(portfolio.tickers())
 
     if cached:
         analyzed_count = len(cached)
+        # 캐시된 데이터에서 날짜와 시간을 가져옴
         analyzed_date  = cached[0].get("analyzed_date", "-") if cached else "-"
         analyzed_time  = cached[0].get("analyzed_time", "") if cached else ""
         time_str = f" {analyzed_time}" if analyzed_time else ""
@@ -179,21 +191,15 @@ def _run_analysis(portfolio: Portfolio, file_key: str):
 
     progress_bar = st.progress(0)
     status_text  = st.empty()
-    partial_area = st.empty()
     partial_results = []
 
     def on_progress(current, total, ticker, item):
         pct = int(current / total * 100) if total > 0 else 0
         progress_bar.progress(pct)
-
         if ticker == "데이터 수집 중":
-            status_text.markdown(
-                f"📡 {'Finnhub' if has_finnhub_key() else 'yfinance'}으로 **{total}개 종목** 데이터 수집 중..."
-            )
+            status_text.markdown(f"📡 {'Finnhub' if has_finnhub_key() else 'yfinance'}으로 **{total}개 종목** 데이터 수집 중...")
         elif ticker == "AI 분석 중":
-            status_text.markdown(
-                f"🤖 **Gemini AI**가 **{total}개 종목** 전체를 한 번에 분석 중..."
-            )
+            status_text.markdown(f"🤖 **Gemini AI**가 **{total}개 종목** 전체를 한 번에 분석 중...")
         elif item is not None:
             status_text.markdown(f"✅ **{ticker}** 분석 완료 ({current}/{total})")
         else:
@@ -207,6 +213,16 @@ def _run_analysis(portfolio: Portfolio, file_key: str):
             progress_callback=on_progress,
             portfolio=portfolio,
         )
+        
+        # 분석 완료 직후, 한국 시간 정보를 결과 데이터에 주입
+        if results:
+            now_kst = get_kst_now()
+            kst_date = now_kst.strftime("%Y-%m-%d")
+            kst_time = now_kst.strftime("%H:%M:%S")
+            for res in results:
+                res["analyzed_date"] = kst_date
+                res["analyzed_time"] = kst_time
+
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
