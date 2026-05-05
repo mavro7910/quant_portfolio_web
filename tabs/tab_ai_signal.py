@@ -184,16 +184,18 @@ def _run_analysis(portfolio: Portfolio, file_key: str):
         pct = int(current / total * 100) if total > 0 else 0
         progress_bar.progress(pct)
 
-        if item is not None:
-            status_text.markdown(f"✅ **{ticker}** 분석 완료 ({current}/{total})")
-        elif ticker == "데이터 수집 중":
+        if ticker == "데이터 수집 중":
             status_text.markdown(
                 f"📡 {'Finnhub' if has_finnhub_key() else 'yfinance'}으로 **{total}개 종목** 데이터 수집 중..."
             )
-        else:
+        elif ticker == "AI 분석 중":
             status_text.markdown(
-                f"🤖 **{ticker}** AI 분석 중... ({current + 1}/{total})"
+                f"🤖 **Gemini AI**가 **{total}개 종목** 전체를 한 번에 분석 중..."
             )
+        elif item is not None:
+            status_text.markdown(f"✅ **{ticker}** 분석 완료 ({current}/{total})")
+        else:
+            status_text.markdown(f"🤖 **{ticker}** 분석 중... ({current}/{total})")
 
     try:
         results = analyze_portfolio_signals(
