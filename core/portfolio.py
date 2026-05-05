@@ -47,6 +47,12 @@ _DEFAULTS = {
     },
     "weekly_budget": 100_000,
     "benchmarks": ["QQQM", "SPY"],
+    "settings": {
+        "top_n": 10,
+        "use_mcap": True,
+        "ai_provider": "gemini",
+        "signal_lang": "ko",
+    },
 }
 
 
@@ -147,3 +153,15 @@ class Portfolio:
 
     def remove_holding(self, ticker: str):
         self._data.setdefault("holdings", {}).pop(ticker, None)
+
+    # ── 설정값 ────────────────────────────────────────────────────
+
+    @property
+    def settings(self) -> dict:
+        return self._data.setdefault("settings", dict(_DEFAULTS["settings"]))
+
+    def get_setting(self, key: str, default=None):
+        return self.settings.get(key, _DEFAULTS["settings"].get(key, default))
+
+    def set_setting(self, key: str, value):
+        self.settings[key] = value
