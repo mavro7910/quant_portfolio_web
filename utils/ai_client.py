@@ -258,19 +258,17 @@ def fetch_analyst_data(tickers: list[str]) -> dict[str, dict]:
             except Exception:
                 pass
 
-            # ── ⑤ EPS 서프라이즈 (earnings_dates) ────────────────
+            # ── ⑤ EPS 서프라이즈 ─────────────────────────────────
+            # earnings_dates → earnings_history 순서로 시도
             try:
                 ed_df = tk.earnings_dates
                 if ed_df is not None and not ed_df.empty:
-                    # 과거 발표 중 Surprise(%) 있는 것
                     now_ts = pd.Timestamp.now(tz="UTC")
-                    # tz-naive인 경우 대비
                     try:
                         past = ed_df[ed_df.index < now_ts]
                     except TypeError:
                         past = ed_df[ed_df.index < pd.Timestamp.now()]
 
-                    # 컬럼명 유연하게 찾기
                     surp_col = None
                     for c in past.columns:
                         if "surprise" in c.lower():
@@ -283,6 +281,34 @@ def fetch_analyst_data(tickers: list[str]) -> dict[str, dict]:
                             data["eps_surprise_pct"] = round(float(past_clean[surp_col].iloc[0]), 1)
             except Exception:
                 pass
+
+            # earnings_history fallback (yfinance 1.0+)
+            if data.get("eps_surprise_pct") is None:
+                try:
+                    eh = tk.earnings_history
+                    if eh is not None and not eh.empty:
+                        # 컬럼: epsActual, epsEstimate, epsDifference, surprisePercent
+                        surp_col = None
+                        for c in eh.columns:
+                            if "surprise" in c.lower() or "percent" in c.lower():
+                                surp_col = c
+                                break
+                        if surp_col is None and "epsDifference" in eh.columns and "epsEstimate" in eh.columns:
+                            # 수동 계산
+                            row = eh.dropna(subset=["epsDifference", "epsEstimate"]).iloc[0]
+                            est = float(row["epsEstimate"])
+                            if est != 0:
+                                data["eps_surprise_pct"] = round(float(row["epsDifference"]) / abs(est) * 100, 1)
+                        elif surp_col:
+                            clean = eh.dropna(subset=[surp_col])
+                            if not clean.empty:
+                                val = float(clean[surp_col].iloc[0])
+                                # surprisePercent가 소수(0.08)면 % 변환
+                                if abs(val) < 5:
+                                    val = round(val * 100, 1)
+                                data["eps_surprise_pct"] = round(val, 1)
+                except Exception:
+                    pass
 
             # 정리
             result[t] = {
@@ -488,13 +514,44 @@ def fetch_ticker_data(
 # 프롬프트 빌더
 # ─────────────────────────────────────────────
 
-_SYSTEM_PROMPT = (
-    "당신은 퀀트 포트폴리오 분석 AI입니다. "
-    "주어진 퀀트 지표와 뉴스를 종합하여 전략적 판단을 내립니다. "
-    "절대 수치를 그대로 반복하지 마세요. "
-    "지표들의 조합이 말하는 의미를 해석하고, 뉴스가 그 판단을 강화하는지 약화하는지 연결하세요. "
-    "JSON 배열만 응답하세요. 코드블록, 설명 텍스트 절대 없이."
-)
+_SYSTEM_PROMPT = """당신은 KH 퀀트 포트폴리오의 전담 분석 AI입니다.
+
+[KH 전략 작동 원리]
+매주 아래 순서로 종목별 매수 비중을 결정합니다.
+
+① 시장 국면 판단
+   QQQ 현재가 > 200일 이동평균 → 강세장(Bull)
+   QQQ 현재가 < 200일 이동평균 → 약세장(Bear)
+
+② 모멘텀 점수 계산 (4개 기간 가중 평균)
+   21일(1개월) 수익률 순위 × 10%
+   63일(3개월) 수익률 순위 × 20%
+   126일(6개월) 수익률 순위 × 30%
+   252일(12개월) 수익률 순위 × 40%
+   → 최근보다 중장기 모멘텀에 더 높은 가중치
+   → 수익률 자체가 아닌 포트폴리오 내 상대 순위를 사용
+
+③ 변동성 역수 점수
+   60일 일간 수익률 표준편차의 역수를 순위화
+   → 덜 출렁이는 종목이 높은 점수
+
+④ 국면별 팩터 배합
+   Bull: 모멘텀 70% + 변동성역수 30%
+   Bear: 모멘텀 40% + 변동성역수 60%
+   → Bear 전환 시 변동성 높은 종목은 비중이 급격히 감소
+
+⑤ 비중 결정
+   단일 종목 최대 25% 캡
+   전략비중 > 현재보유비중 → 이번 주 추가 매수 대상
+   전략비중 < 현재보유비중 → 자연 희석 구간 (별도 매도 없음)
+
+[분석 규칙]
+- 위 전략 맥락 안에서 판단하세요
+- 수치 나열 금지. 전략 내에서 이 수치가 의미하는 바를 해석하세요
+- 뉴스가 없으면 퀀트·애널리스트 데이터만으로 판단, 뉴스 내용 추측·창작 절대 금지
+- 사전감지신호가 있으면 반드시 bullets에 반영하세요
+- 액션은 조건부로: "~확인 시 확대 / ~시 축소", "비중 유지" 단독 사용 금지
+- JSON 배열만 응답, 코드블록·설명 텍스트 절대 없이"""
 
 
 def _format_news_block(articles: list[dict]) -> str:
@@ -597,15 +654,16 @@ def _build_batch_prompt(
         + f"""
 
 JSON 배열로만 응답 (코드블록 없이):
-[{{"ticker":"종목","signal":"up/down/neutral","reason":"전략적핵심판단25자이내","bullets":["퀀트해석","뉴스연결","액션시사점"],"tags":["태그1","태그2"],"related":[{{"ticker":"관련기업","reason":"연관이유"}}]}}]
+[{{"ticker":"종목","signal":"up/down/neutral","reason":"핵심판단40자이내","bullets":["퀀트해석","뉴스_애널리스트연결","조건부액션"],"tags":["태그1","태그2"],"related":[{{"ticker":"관련기업","reason":"연관이유"}}]}}]
 
 rules:
 - 한국어
-- signal은 퀀트+애널리스트+뉴스 종합 판단
+- signal: 퀀트+애널리스트+뉴스 종합 판단. 상충 신호면 neutral
+- reason: 40자 이내. 가장 중요한 판단 한 문장 (예: "강력매수 컨센서스나 목표가 이미 하회, 단기 과열 가능성")
 - bullets 정확히 3개:
-  ①퀀트해석: 지표 수치 반복 금지, 조합이 말하는 전략적 의미 해석
-  ②뉴스연결: 뉴스+애널리스트 데이터가 퀀트 상태를 강화/약화하는지
-  ③액션시사점: 비중확대/유지/축소 중 하나와 구체적 근거
+  ①퀀트해석: "A지표와 B지표가 상반되므로/일치하므로 ~를 의미한다" 형식. 수치 나열 금지
+  ②뉴스_애널리스트: 뉴스와 애널리스트 데이터 중 퀀트와 상충하는 신호가 있으면 반드시 언급. 없으면 강화/약화 방향 서술
+  ③조건부액션: "~가 확인되면 비중확대 / ~시 축소 고려" 형식으로 조건 명시. "비중 유지" 단독 사용 금지
 - related: 연관 기업 1~2개, 포트폴리오 내외 무관(없으면[])
 - 반드시 {len(holdings)}개 전부 포함: {', '.join(tickers_list)}"""
     )
@@ -710,8 +768,8 @@ def _gemini_single(
         f"퀀트: {quant_str}\n"
         f"애널리스트: {ana_str}\n"
         f"뉴스:\n{news_str}\n\n"
-        f"수치를 반복하지 말고 지표 조합의 전략적 의미를 해석하세요.\n"
-        f'JSON:{{"signal":"up/down/neutral","reason":"25자이내","bullets":["퀀트지표조합해석","뉴스가퀀트를강화/약화","비중확대/유지/축소+근거"],"tags":["태그1"],"related":[]}}'
+        f"상충 신호가 있으면 반드시 언급하고, 액션은 조건부로 명시하세요.\n"
+        f'JSON:{{"signal":"up/down/neutral","reason":"40자이내핵심판단","bullets":["퀀트해석(인과관계형식)","뉴스_애널리스트(상충신호포함)","조건부액션(조건명시)"],"tags":["태그1"],"related":[]}}'
     )
 
     response = model.generate_content(prompt)
