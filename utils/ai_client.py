@@ -566,16 +566,17 @@ def _build_batch_prompt(
         + f"""
 
 JSON 배열로만 응답 (코드블록 없이):
-[{{"ticker":"종목","signal":"up/down/neutral","reason":"핵심판단40자이내","bullets":["뉴스해석","애널리스트해석(상충신호포함)","조건부액션"],"tags":["태그1","태그2"],"related":[{{"ticker":"관련기업","reason":"연관이유"}}]}}]
+[{{"ticker":"종목","signal":"up/down/neutral","reason":"핵심판단40자이내","bullets":["뉴스해석","애널리스트해석(상충신호포함)","조건부액션","AI종합의견"],"tags":["태그1","태그2"],"related":[{{"ticker":"관련기업","reason":"연관이유"}}]}}]
 
 rules:
 - 한국어
 - signal: 뉴스+애널리스트 종합. 상충 신호 있으면 neutral
 - reason: 40자 이내, 가장 핵심적인 판단 한 문장
-- bullets 정확히 3개:
+- bullets 정확히 4개:
   ①뉴스해석: 뉴스 본문 내용 기반 해석. 뉴스 없으면 "최근 유의미한 뉴스 없음"
   ②애널리스트: 투자의견·목표가·어닝·EPS 종합 해석. 사전감지신호 반드시 반영
   ③조건부액션: "~확인되면 비중확대 / ~시 일부 축소" 형식. 조건 없는 단순 유지 금지
+  ④AI종합의견: 위 3개를 바탕으로 한 AI의 최종 판단. 확인된 데이터만 근거로 사용, 추측 금지
 - related: 직접 연관된 실제 기업 1~2개 (공급사/경쟁사/파트너), 없으면[]
 - 반드시 {len(holdings)}개 전부 포함: {', '.join(tickers_list)}"""
     )
@@ -611,15 +612,15 @@ def _gemini_batch(
             continue
         _, change_pct = data_map.get(ticker, ([], None))
         if change_pct is not None:
-            item["signal"] = "up" if change_pct > 0 else ("down" if change_pct < 0 else "neutral")
+            item["signal"] = "neutral" if abs(change_pct) < 0.5 else ("up" if change_pct > 0 else "down")
         item.setdefault("signal", "neutral")
         item.setdefault("reason", "분석 정보 없음")
-        item.setdefault("bullets", ["정보 없음"] * 3)
+        item.setdefault("bullets", ["정보 없음"] * 4)
         item.setdefault("tags", [])
         item.setdefault("related", [])
-        while len(item["bullets"]) < 3:
+        while len(item["bullets"]) < 4:
             item["bullets"].append("추가 정보 없음")
-        item["bullets"] = item["bullets"][:3]
+        item["bullets"] = item["bullets"][:4]
         result_map[ticker] = item
 
     return result_map
@@ -662,7 +663,7 @@ def _gemini_single(
         f"애널리스트: {ana_str}\n"
         f"사전감지신호: {conflict}\n"
         f"뉴스:{news_note}\n{news_str}\n\n"
-        f'JSON:{{"signal":"up/down/neutral","reason":"40자이내","bullets":["뉴스해석","애널리스트해석(상충포함)","조건부액션"],"tags":["태그1"],"related":[]}}'
+        f'JSON:{{"signal":"up/down/neutral","reason":"40자이내","bullets":["뉴스해석","애널리스트해석(상충포함)","조건부액션","AI종합의견(확인된데이터만근거)"],"tags":["태그1"],"related":[]}}'
     )
 
     response = model.generate_content(prompt)
@@ -671,15 +672,15 @@ def _gemini_single(
     result = json.loads(raw)
 
     if change_pct is not None:
-        result["signal"] = "up" if change_pct > 0 else ("down" if change_pct < 0 else "neutral")
+        result["signal"] = "neutral" if abs(change_pct) < 0.5 else ("up" if change_pct > 0 else "down")
     result.setdefault("signal", "neutral")
     result.setdefault("reason", "분석 정보 없음")
-    result.setdefault("bullets", ["정보 없음"] * 3)
+    result.setdefault("bullets", ["정보 없음"] * 4)
     result.setdefault("tags", [])
     result.setdefault("related", [])
-    while len(result["bullets"]) < 3:
+    while len(result["bullets"]) < 4:
         result["bullets"].append("추가 정보 없음")
-    result["bullets"] = result["bullets"][:3]
+    result["bullets"] = result["bullets"][:4]
     return result
 
 
