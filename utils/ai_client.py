@@ -352,7 +352,9 @@ def fetch_ticker_data(
 
 _SYSTEM_PROMPT = (
     "당신은 퀀트 포트폴리오 분석 AI입니다. "
-    "퀀트 지표와 뉴스를 종합하여 각 종목의 전략적 상태를 분석합니다. "
+    "주어진 퀀트 지표와 뉴스를 종합하여 전략적 판단을 내립니다. "
+    "절대 수치를 그대로 반복하지 마세요. "
+    "지표들의 조합이 말하는 의미를 해석하고, 뉴스가 그 판단을 강화하는지 약화하는지 연결하세요. "
     "JSON 배열만 응답하세요. 코드블록, 설명 텍스트 절대 없이."
 )
 
@@ -432,13 +434,16 @@ def _build_batch_prompt(holdings: dict, data_map: dict, quant_ctx: dict) -> str:
         + f"""
 
 JSON 배열로만 응답 (코드블록 없이):
-[{{"ticker":"종목","signal":"up/down/neutral","reason":"전략적핵심이유25자이내","bullets":["퀀트근거","뉴스근거","투자시사점"],"tags":["태그1","태그2"],"related":[{{"ticker":"관련종목","reason":"연관이유"}}]}}]
+[{{"ticker":"종목","signal":"up/down/neutral","reason":"전략적핵심판단25자이내","bullets":["퀀트해석","뉴스연결","액션시사점"],"tags":["태그1","태그2"],"related":[{{"ticker":"관련종목","reason":"연관이유"}}]}}]
 
 rules:
 - 한국어
-- signal은 퀀트+뉴스 종합 판단 (단순 등락률이 아님)
-- bullets 정확히 3개: ①퀀트근거 ②뉴스근거 ③투자시사점
-- related: 포트폴리오 내 연관 종목 1~2개(없으면[])
+- signal은 퀀트+뉴스 종합 판단 (단순 등락률 아님)
+- bullets 정확히 3개:
+  ①퀀트해석: 지표 수치를 그대로 반복하지 말고, 모멘텀/변동성/비중/52주위치의 조합이 말하는 전략적 의미를 해석
+  ②뉴스연결: 뉴스가 퀀트 상태를 강화하는지 약화하는지, 그 이유
+  ③액션시사점: 비중확대/유지/축소 중 하나와 구체적 근거 (예: "고점 근접 + 실적 불확실성으로 일부 차익실현 고려")
+- related: 해당 종목과 연관된 기업 1~2개 — 포트폴리오 내외 무관하게 공급사/경쟁사/파트너 등 실제 연관 기업 포함(없으면[])
 - 반드시 {len(holdings)}개 전부 포함: {', '.join(tickers_list)}"""
     )
 
@@ -523,7 +528,8 @@ def _gemini_single(
         f"종목:{ticker} ({shares:.1f}주) | 시장:{market_str} | 전일대비:{change_str}\n"
         f"퀀트: {quant_str}\n"
         f"뉴스:\n{news_str}\n\n"
-        f'JSON:{{"signal":"up/down/neutral","reason":"25자이내","bullets":["퀀트근거","뉴스근거","투자시사점"],"tags":["태그1"],"related":[]}}'
+        f"수치를 반복하지 말고 지표 조합의 전략적 의미를 해석하세요.\n"
+        f'JSON:{{"signal":"up/down/neutral","reason":"25자이내","bullets":["퀀트지표조합해석","뉴스가퀀트를강화/약화","비중확대/유지/축소+근거"],"tags":["태그1"],"related":[]}}'
     )
 
     response = model.generate_content(prompt)
