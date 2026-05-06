@@ -22,8 +22,12 @@ from utils.ai_client import (
     analyze_portfolio_signals,
     get_api_key, has_api_key, set_api_key,
     get_finnhub_key, set_finnhub_key, has_finnhub_key,
+    get_marketaux_key, set_marketaux_key, has_marketaux_key,
 )
-from core.secrets_store import load_api_key, load_signal_cache, save_signal_cache, load_finnhub_key
+from core.secrets_store import (
+    load_api_key, load_signal_cache, save_signal_cache,
+    load_finnhub_key, load_marketaux_key,
+)
 
 
 # ─────────────────────────────────────────────
@@ -72,6 +76,11 @@ def render(portfolio: Portfolio, file_key: str):
         stored_fh, _ = load_finnhub_key(file_key)
         if stored_fh:
             set_finnhub_key(stored_fh)
+
+    if not has_marketaux_key():
+        stored_mx, _ = load_marketaux_key(file_key)
+        if stored_mx:
+            set_marketaux_key(stored_mx)
 
     if not has_api_key():
         stored, err = load_api_key(file_key)
@@ -153,14 +162,23 @@ def render(portfolio: Portfolio, file_key: str):
             unsafe_allow_html=True,
         )
 
-    col_btn1, col_btn2 = st.columns([1, 1])
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
     with col_btn1:
         run_signal = st.button(
-            "🔄 재분석" if cached else "🔍 시그널 분석",
+            "🔄 스마트 재분석" if cached else "🔍 시그널 분석",
             key="btn_run_signal",
             use_container_width=True,
+            help="변동이 큰 종목만 재분석, 나머지는 캐시 사용" if cached else None,
         )
     with col_btn2:
+        run_full = st.button(
+            "🔃 전체 재분석",
+            key="btn_run_full",
+            use_container_width=True,
+            disabled=not cached,
+            help="모든 종목을 강제로 재분석",
+        )
+    with col_btn3:
         if st.button("📂 저장된 결과 불러오기", key="btn_load_cache", use_container_width=True):
             data, err = load_signal_cache(file_key)
             if data:
@@ -172,7 +190,11 @@ def render(portfolio: Portfolio, file_key: str):
                 st.info("저장된 분석 결과가 없습니다.")
 
     if run_signal:
-        _run_analysis(portfolio, file_key)
+        _run_analysis(portfolio, file_key, force_full=False)
+        cached = _get_cached(file_key)
+
+    if run_full:
+        _run_analysis(portfolio, file_key, force_full=True)
         cached = _get_cached(file_key)
 
     if cached:
@@ -183,25 +205,39 @@ def render(portfolio: Portfolio, file_key: str):
 # 분석 실행
 # ─────────────────────────────────────────────
 
-def _run_analysis(portfolio: Portfolio, file_key: str):
+def _run_analysis(portfolio: Portfolio, file_key: str, force_full: bool = False):
     api_key      = get_api_key()
     holdings     = {t: s for t, s in portfolio.holdings.items() if s > 0}
-    tickers_list = list(holdings.keys())
-    total        = len(tickers_list)
+    total        = len(holdings)
+
+    # 스마트 캐시: 당일 기존 결과 로드 (강제 전체 재분석이 아닐 때)
+    cached_results = None
+    if not force_full:
+        cached_results = _get_cached(file_key)
 
     progress_bar = st.progress(0)
     status_text  = st.empty()
-    partial_results = []
 
     def on_progress(current, total, ticker, item):
         pct = int(current / total * 100) if total > 0 else 0
         progress_bar.progress(pct)
         if ticker == "데이터 수집 중":
-            status_text.markdown(f"📡 {'Finnhub' if has_finnhub_key() else 'yfinance'}으로 **{total}개 종목** 데이터 수집 중...")
+            sources = []
+            if has_finnhub_key():
+                sources.append("Finnhub")
+            if has_marketaux_key():
+                sources.append("Marketaux")
+            if not sources:
+                sources.append("yfinance")
+            status_text.markdown(f"📡 **{'+'.join(sources)}**으로 **{total}개 종목** 데이터 수집 중...")
+        elif ticker == "퀀트 지표 계산 중":
+            status_text.markdown("📊 **퀀트 지표** 계산 중 (모멘텀/변동성/52주)...")
         elif ticker == "AI 분석 중":
-            status_text.markdown(f"🤖 **Gemini AI**가 **{total}개 종목** 전체를 한 번에 분석 중...")
+            status_text.markdown("🤖 **Gemini AI** 분석 중...")
         elif item is not None:
-            status_text.markdown(f"✅ **{ticker}** 분석 완료 ({current}/{total})")
+            reused = item.get("reused_cache", False)
+            tag    = "📋 캐시" if reused else "✅ 완료"
+            status_text.markdown(f"{tag} **{ticker}** ({current}/{total})")
         else:
             status_text.markdown(f"🤖 **{ticker}** 분석 중... ({current}/{total})")
 
@@ -210,18 +246,20 @@ def _run_analysis(portfolio: Portfolio, file_key: str):
             holdings=holdings,
             api_key=api_key,
             finnhub_key=get_finnhub_key(),
+            marketaux_key=get_marketaux_key(),
             progress_callback=on_progress,
             portfolio=portfolio,
+            cached_results=cached_results,
         )
-        
-        # 분석 완료 직후, 한국 시간 정보를 결과 데이터에 주입
+
         if results:
-            now_kst = get_kst_now()
+            now_kst  = get_kst_now()
             kst_date = now_kst.strftime("%Y-%m-%d")
             kst_time = now_kst.strftime("%H:%M:%S")
             for res in results:
-                res["analyzed_date"] = kst_date
-                res["analyzed_time"] = kst_time
+                if not res.get("reused_cache"):
+                    res["analyzed_date"] = kst_date
+                    res["analyzed_time"] = kst_time
 
     except Exception as e:
         progress_bar.empty()
@@ -230,7 +268,14 @@ def _run_analysis(portfolio: Portfolio, file_key: str):
         return
 
     progress_bar.progress(100)
-    status_text.markdown(f"✅ **분석 완료!** {total}개 종목")
+    reused_count   = sum(1 for r in results if r.get("reused_cache"))
+    analyzed_count = len(results) - reused_count
+    if reused_count > 0:
+        status_text.markdown(
+            f"✅ **분석 완료!** 재분석 {analyzed_count}개 · 캐시 재사용 {reused_count}개"
+        )
+    else:
+        status_text.markdown(f"✅ **분석 완료!** {len(results)}개 종목")
 
     if results:
         _set_cached(file_key, results)

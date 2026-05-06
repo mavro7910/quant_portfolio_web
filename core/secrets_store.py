@@ -158,6 +158,25 @@ def save_signal_cache(uid: str, data: list) -> tuple[bool, str | None]:
 
 
 # ─────────────────────────────────────────────
+# Marketaux 키
+# ─────────────────────────────────────────────
+
+def load_marketaux_key(uid: str) -> tuple[str | None, str | None]:
+    keys, err = _load_keys_dict(uid)
+    return keys.get("marketaux"), err
+
+def save_marketaux_key(uid: str, key: str) -> tuple[bool, str | None]:
+    keys, _ = _load_keys_dict(uid)
+    keys["marketaux"] = key
+    return _save_keys_dict(uid, keys)
+
+def delete_marketaux_key(uid: str) -> tuple[bool, str | None]:
+    keys, _ = _load_keys_dict(uid)
+    keys.pop("marketaux", None)
+    return _save_keys_dict(uid, keys)
+
+
+# ─────────────────────────────────────────────
 # 하위 호환 (기존 코드용)
 # ─────────────────────────────────────────────
 

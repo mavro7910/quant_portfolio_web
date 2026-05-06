@@ -7,10 +7,12 @@ from core.portfolio import Portfolio
 from core.secrets_store import (
     load_api_key, save_api_key, delete_api_key,
     load_finnhub_key, save_finnhub_key, delete_finnhub_key,
+    load_marketaux_key, save_marketaux_key, delete_marketaux_key,
 )
 from utils.ai_client import (
     set_api_key, get_api_key, has_api_key, clear_api_key, validate_api_key,
     set_finnhub_key, get_finnhub_key, has_finnhub_key, clear_finnhub_key, validate_finnhub_key,
+    set_marketaux_key, get_marketaux_key, has_marketaux_key, clear_marketaux_key, validate_marketaux_key,
 )
 
 
@@ -111,8 +113,13 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
         if stored_fh:
             set_finnhub_key(stored_fh)
 
+    if not has_marketaux_key():
+        stored_mx, _ = load_marketaux_key(file_key)
+        if stored_mx:
+            set_marketaux_key(stored_mx)
+
     # 현재 상태 표시
-    col_g, col_f = st.columns(2)
+    col_g, col_f, col_mx = st.columns(3)
     with col_g:
         if has_api_key():
             masked = "●●●●" + get_api_key()[-4:]
@@ -125,9 +132,15 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
             st.markdown(f'<div class="success-banner">✅ Finnhub <code>{masked_fh}</code></div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="warn-banner">⚠️ Finnhub 키 없음</div>', unsafe_allow_html=True)
+    with col_mx:
+        if has_marketaux_key():
+            masked_mx = "●●●●" + get_marketaux_key()[-4:]
+            st.markdown(f'<div class="success-banner">✅ Marketaux <code>{masked_mx}</code></div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="warn-banner">⚠️ Marketaux 키 없음 (선택)</div>', unsafe_allow_html=True)
 
     # 입력 폼
-    col_k1, col_k2 = st.columns(2)
+    col_k1, col_k2, col_k3 = st.columns(3)
     with col_k1:
         new_gemini = st.text_input(
             "Gemini API 키",
@@ -143,6 +156,14 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
             placeholder="d1abc123...",
             help="finnhub.io/register 에서 무료 발급",
             key="inp_finnhub_key",
+        )
+    with col_k3:
+        new_marketaux = st.text_input(
+            "Marketaux API 키 (선택)",
+            type="password",
+            placeholder="marketaux 키...",
+            help="marketaux.com 에서 무료 발급 (뉴스 품질 향상)",
+            key="inp_marketaux_key",
         )
 
     col_save, col_del = st.columns([3, 1])
@@ -175,7 +196,19 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
                 else:
                     errors.append(f"Finnhub: {err_fh}")
 
-            if not new_gemini.strip() and not new_finnhub.strip():
+            if new_marketaux.strip():
+                valid_mx, err_mx = validate_marketaux_key(new_marketaux.strip())
+                if valid_mx:
+                    set_marketaux_key(new_marketaux.strip())
+                    ok_mx, save_err_mx = save_marketaux_key(file_key, new_marketaux.strip())
+                    if ok_mx:
+                        saved.append("Marketaux")
+                    else:
+                        errors.append(f"Marketaux 저장 실패: {save_err_mx}")
+                else:
+                    errors.append(f"Marketaux: {err_mx}")
+
+            if not new_gemini.strip() and not new_finnhub.strip() and not new_marketaux.strip():
                 st.error("키를 하나 이상 입력하세요.")
             else:
                 if saved:
@@ -185,12 +218,14 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
                 st.rerun()
 
     with col_del:
-        if has_api_key() or has_finnhub_key():
+        if has_api_key() or has_finnhub_key() or has_marketaux_key():
             if st.button("🗑️ 전체 삭제", key="btn_del_keys", use_container_width=True):
                 clear_api_key()
                 clear_finnhub_key()
+                clear_marketaux_key()
                 delete_api_key(file_key)
                 delete_finnhub_key(file_key)
+                delete_marketaux_key(file_key)
                 st.rerun()
 
     st.markdown(
@@ -199,6 +234,8 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
         '· <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:#90caf9">Gemini 발급</a>'
         ' &nbsp;·&nbsp; '
         '<a href="https://finnhub.io/register" target="_blank" style="color:#90caf9">Finnhub 발급</a>'
+        ' &nbsp;·&nbsp; '
+        '<a href="https://www.marketaux.com/register" target="_blank" style="color:#90caf9">Marketaux 발급 (무료, 뉴스 품질↑)</a>'
         '</div>',
         unsafe_allow_html=True,
     )
