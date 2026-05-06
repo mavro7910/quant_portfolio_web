@@ -1,806 +1,840 @@
 """
-tabs/tab_ai_signal.py
+utils/ai_client.py
 
-AI 시그널 탭.
-- Gemini API로 보유 종목 뉴스 분석
-- 토스증권 스타일 HTML 컴포넌트로 렌더링 (st.components.v1.html)
-- 하루 단위 session_state 캐시로 API 비용 절약
+AI 시그널 분석 — 뉴스 + 애널리스트 데이터 기반
+- 퀀트 컨텍스트 제거 (별도 탭에서 담당)
+- 뉴스 본문 품질 강화 (Marketaux snippet 400자)
+- 애널리스트 데이터 다중 소스 수집
+- 스마트 캐시 유지
 """
 
 from __future__ import annotations
 
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-# date, datetime, timedelta를 가져옵니다.
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import streamlit as st
-import streamlit.components.v1 as components
-
-from core.portfolio import Portfolio
-from utils.ai_client import (
-    analyze_portfolio_signals,
-    get_api_key, has_api_key, set_api_key,
-    get_finnhub_key, set_finnhub_key, has_finnhub_key,
-    get_marketaux_key, set_marketaux_key, has_marketaux_key,
-)
-from core.secrets_store import (
-    load_api_key, load_signal_cache, save_signal_cache,
-    load_finnhub_key, load_marketaux_key,
-)
 
 
 # ─────────────────────────────────────────────
-# 헬퍼 함수: 한국 시간 생성
-# ─────────────────────────────────────────────
-def get_kst_now():
-    """서버(UTC) 시간에 9시간을 더해 한국 시간을 반환"""
-    return datetime.utcnow() + timedelta(hours=9)
-
-
-# ─────────────────────────────────────────────
-# 캐시 (Supabase + session_state 이중화)
+# API 키 관리
 # ─────────────────────────────────────────────
 
-def _get_cached(uid: str) -> list | None:
-    # date.today() 대신 한국 시간 기준 날짜로 키 생성
-    kst_today = get_kst_now().date().isoformat()
-    key = f"signal_cache_{kst_today}"
-    
-    if key in st.session_state:
-        return st.session_state[key]
-    
-    data, err = load_signal_cache(uid)
-    if data:
-        st.session_state[key] = data
-    return data
+def get_api_key() -> str | None:
+    return st.session_state.get("gemini_api_key") or None
 
+def set_api_key(key: str):
+    st.session_state["gemini_api_key"] = key.strip()
 
-def _set_cached(uid: str, data: list):
-    # 저장할 때도 한국 시간 기준 날짜로 키 생성
-    kst_today = get_kst_now().date().isoformat()
-    key = f"signal_cache_{kst_today}"
-    
-    st.session_state[key] = data
-    ok, err = save_signal_cache(uid, data)
-    if not ok:
-        st.warning(f"⚠️ 분석 결과 저장 실패: {err}")
+def clear_api_key():
+    st.session_state.pop("gemini_api_key", None)
+
+def has_api_key() -> bool:
+    k = get_api_key()
+    return bool(k and len(k) > 10)
+
+def get_finnhub_key() -> str | None:
+    return st.session_state.get("finnhub_api_key") or None
+
+def set_finnhub_key(key: str):
+    st.session_state["finnhub_api_key"] = key.strip()
+
+def clear_finnhub_key():
+    st.session_state.pop("finnhub_api_key", None)
+
+def has_finnhub_key() -> bool:
+    k = get_finnhub_key()
+    return bool(k and len(k) > 5)
+
+def get_marketaux_key() -> str | None:
+    return st.session_state.get("marketaux_api_key") or None
+
+def set_marketaux_key(key: str):
+    st.session_state["marketaux_api_key"] = key.strip()
+
+def clear_marketaux_key():
+    st.session_state.pop("marketaux_api_key", None)
+
+def has_marketaux_key() -> bool:
+    k = get_marketaux_key()
+    return bool(k and len(k) > 5)
 
 
 # ─────────────────────────────────────────────
-# 렌더 진입점
+# 키 검증
 # ─────────────────────────────────────────────
 
-def render(portfolio: Portfolio, file_key: str):
-    if not has_finnhub_key():
-        stored_fh, _ = load_finnhub_key(file_key)
-        if stored_fh:
-            set_finnhub_key(stored_fh)
+def validate_api_key(api_key: str) -> tuple[bool, str | None]:
+    key = api_key.strip()
+    if not key.startswith("AIza"):
+        return False, "Gemini 키는 'AIza'로 시작해야 합니다."
+    if len(key) < 35:
+        return False, "키가 너무 짧습니다."
+    return True, None
 
-    if not has_marketaux_key():
-        stored_mx, _ = load_marketaux_key(file_key)
-        if stored_mx:
-            set_marketaux_key(stored_mx)
+def validate_finnhub_key(api_key: str) -> tuple[bool, str | None]:
+    key = api_key.strip()
+    if len(key) < 10:
+        return False, "키가 너무 짧습니다."
+    return True, None
 
-    if not has_api_key():
-        stored, err = load_api_key(file_key)
-        if stored:
-            set_api_key(stored)
-        else:
-            col_key, col_keybtn = st.columns([4, 1])
-            with col_key:
-                if err:
-                    st.warning(f"키 자동 로드 실패: {err}")
-                else:
-                    st.markdown(
-                        '<div class="warn-banner">🔑 API 키가 없습니다. 설정 탭에서 등록하거나 불러오세요.</div>',
-                        unsafe_allow_html=True,
+def validate_marketaux_key(api_key: str) -> tuple[bool, str | None]:
+    key = api_key.strip()
+    if len(key) < 10:
+        return False, "키가 너무 짧습니다."
+    return True, None
+
+
+# ─────────────────────────────────────────────
+# 애널리스트 데이터 수집
+# ─────────────────────────────────────────────
+
+def fetch_analyst_data(tickers: list[str]) -> dict[str, dict]:
+    """
+    투자의견, 목표주가, 어닝 일정, EPS 서프라이즈 수집.
+    info → analyst_price_targets → recommendations_summary 순으로 fallback.
+    """
+    import yfinance as yf
+    import pandas as pd
+
+    result = {}
+    for t in tickers:
+        try:
+            tk   = yf.Ticker(t)
+            data = {}
+
+            # ── ① info ──────────────────────────────────────────
+            try:
+                info = tk.info or {}
+                data["rec_key"]     = (info.get("recommendationKey") or "").upper() or None
+                data["rec_mean"]    = info.get("recommendationMean")
+                data["n_analysts"]  = info.get("numberOfAnalystOpinions")
+                data["target_mean"] = info.get("targetMeanPrice")
+                data["target_high"] = info.get("targetHighPrice")
+                data["target_low"]  = info.get("targetLowPrice")
+                data["current_price"] = (
+                    info.get("currentPrice")
+                    or info.get("regularMarketPrice")
+                    or info.get("previousClose")
+                )
+            except Exception:
+                pass
+
+            # ── ② fast_info 현재가 보완 ─────────────────────────
+            if not data.get("current_price"):
+                try:
+                    fi = tk.fast_info
+                    data["current_price"] = (
+                        getattr(fi, "last_price", None)
+                        or getattr(fi, "regular_market_price", None)
+                        or getattr(fi, "previous_close", None)
                     )
-            with col_keybtn:
-                st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
-                if st.button("🔑 키 불러오기", key="btn_load_key", use_container_width=True):
-                    stored2, err2 = load_api_key(file_key)
-                    if stored2:
-                        set_api_key(stored2)
-                        st.rerun()
-                    elif err2:
-                        st.error(f"불러오기 실패: {err2}")
-                    else:
-                        st.error("저장된 키가 없습니다. 설정 탭에서 등록하세요.")
+                except Exception:
+                    pass
 
-    if not portfolio.tickers():
-        st.markdown(
-            '<div class="info-banner">📋 포트폴리오 탭에서 종목을 먼저 추가하세요.</div>',
-            unsafe_allow_html=True,
-        )
-        return
+            # ── ③ analyst_price_targets 목표주가 보완 ────────────
+            if not data.get("target_mean"):
+                try:
+                    apt = tk.analyst_price_targets
+                    if apt is not None:
+                        if isinstance(apt, pd.DataFrame) and not apt.empty:
+                            cols_lower = [c.lower() for c in apt.columns]
+                            row = apt.iloc[-1]
+                            for key, candidates in [
+                                ("target_mean", ["mean"]),
+                                ("target_high", ["high"]),
+                                ("target_low",  ["low"]),
+                            ]:
+                                for c in candidates:
+                                    if c in cols_lower:
+                                        val = row[apt.columns[cols_lower.index(c)]]
+                                        if val and float(val) > 0:
+                                            data[key] = float(val)
+                                        break
+                        elif isinstance(apt, pd.Series):
+                            for key, candidates in [
+                                ("target_mean", ["mean", "targetMeanPrice"]),
+                                ("target_high", ["high", "targetHighPrice"]),
+                                ("target_low",  ["low",  "targetLowPrice"]),
+                            ]:
+                                for c in candidates:
+                                    val = apt.get(c)
+                                    if val and float(val) > 0:
+                                        data[key] = float(val)
+                                        break
+                except Exception:
+                    pass
 
-    active_holdings = {t: s for t, s in portfolio.holdings.items() if s > 0}
-    if not active_holdings:
-        st.markdown(
-            '<div class="warn-banner">⚠️ 보유 중인 종목이 없어요. 포트폴리오 탭에서 수량을 입력해주세요.</div>',
-            unsafe_allow_html=True,
-        )
-        return
+            # ── ④ recommendations_summary 투자의견 보완 ──────────
+            if not data.get("rec_key"):
+                try:
+                    rs = tk.recommendations_summary
+                    if rs is not None and not rs.empty:
+                        row = rs.iloc[0]
+                        strong_buy  = int(row.get("strongBuy",  0) or 0)
+                        buy         = int(row.get("buy",        0) or 0)
+                        hold        = int(row.get("hold",       0) or 0)
+                        sell        = int(row.get("sell",       0) or 0)
+                        strong_sell = int(row.get("strongSell", 0) or 0)
+                        total = strong_buy + buy + hold + sell + strong_sell
+                        if total > 0:
+                            data["n_analysts"] = total
+                            if strong_buy / total > 0.4:
+                                data["rec_key"] = "STRONG_BUY"
+                            elif (strong_buy + buy) / total > 0.5:
+                                data["rec_key"] = "BUY"
+                            elif (sell + strong_sell) / total > 0.4:
+                                data["rec_key"] = "SELL"
+                            else:
+                                data["rec_key"] = "HOLD"
+                except Exception:
+                    pass
 
-    if not has_api_key():
-        st.markdown(
-            '<div class="warn-banner">'
-            '🔑 <b>Gemini API 키가 필요합니다.</b><br>'
-            '설정 탭에서 API 키를 입력하세요.<br>'
-            '<a href="https://aistudio.google.com/app/apikey" target="_blank" '
-            'style="color:#f0a862">Google AI Studio에서 무료 발급 →</a>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        return
+            # ── ⑤ 상승여력 계산 ─────────────────────────────────
+            curr  = data.get("current_price")
+            tmean = data.get("target_mean")
+            if curr and tmean and float(curr) > 0:
+                data["target_upside_pct"] = round((float(tmean) / float(curr) - 1) * 100, 1)
 
-    cached = _get_cached(file_key)
-    ticker_count = len(portfolio.tickers())
+            # ── ⑥ 어닝 발표일 ───────────────────────────────────
+            try:
+                cal = tk.calendar
+                ed  = None
+                if cal is not None:
+                    if isinstance(cal, dict):
+                        ed = cal.get("Earnings Date")
+                        if isinstance(ed, list) and ed:
+                            ed = ed[0]
+                    elif isinstance(cal, pd.DataFrame) and not cal.empty:
+                        if "Earnings Date" in cal.index:
+                            ed = cal.loc["Earnings Date"].iloc[0]
+                        elif "Earnings Date" in cal.columns:
+                            ed = cal["Earnings Date"].iloc[0]
 
-    if cached:
-        analyzed_count = len(cached)
-        # 캐시된 데이터에서 날짜와 시간을 가져옴
-        analyzed_date  = cached[0].get("analyzed_date", "-") if cached else "-"
-        analyzed_time  = cached[0].get("analyzed_time", "") if cached else ""
-        time_str = f" {analyzed_time}" if analyzed_time else ""
-        st.markdown(
-            f'<div class="success-banner">'
-            f'✅ 분석 결과 로드됨 · <b>{analyzed_count}개 종목</b> · '
-            f'{analyzed_date}{time_str} 기준'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        active_count = len([t for t, s in portfolio.holdings.items() if s > 0])
-        st.markdown(
-            f'<div class="info-banner">'
-            f'📡 보유 수량이 있는 <b>{active_count}개 종목</b>의 최신 뉴스를 AI가 분석합니다.<br>'
-            f'<span style="font-size:0.8rem;color:#5c6f99">'
-            f'분석 완료 후 결과가 저장됩니다</span>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+                if ed is not None:
+                    ed_ts     = pd.Timestamp(ed)
+                    ed_date   = ed_ts.date()
+                    from datetime import date as date_cls
+                    today_d   = date_cls.today()
+                    days_left = (ed_date - today_d).days
+                    if -30 <= days_left <= 90:
+                        data["earnings_date"]      = ed_date.isoformat()
+                        data["earnings_days_left"] = days_left
+            except Exception:
+                pass
 
-    col_btn1, col_btn2, col_btn3 = st.columns([1, 1, 1])
-    with col_btn1:
-        run_signal = st.button(
-            "🔄 스마트 재분석" if cached else "🔍 시그널 분석",
-            key="btn_run_signal",
-            use_container_width=True,
-            help="변동이 큰 종목만 재분석, 나머지는 캐시 사용" if cached else None,
-        )
-    with col_btn2:
-        run_full = st.button(
-            "🔃 전체 재분석",
-            key="btn_run_full",
-            use_container_width=True,
-            disabled=not cached,
-            help="모든 종목을 강제로 재분석",
-        )
-    with col_btn3:
-        if st.button("📂 저장된 결과 불러오기", key="btn_load_cache", use_container_width=True):
-            data, err = load_signal_cache(file_key)
-            if data:
-                _set_cached(file_key, data)
-                st.rerun()
-            elif err:
-                st.error(f"불러오기 실패: {err}")
-            else:
-                st.info("저장된 분석 결과가 없습니다.")
+            # ── ⑦ EPS 서프라이즈 ────────────────────────────────
+            try:
+                ed_df = tk.earnings_dates
+                if ed_df is not None and not ed_df.empty:
+                    now_ts = pd.Timestamp.now(tz="UTC")
+                    try:
+                        past = ed_df[ed_df.index < now_ts]
+                    except TypeError:
+                        past = ed_df[ed_df.index < pd.Timestamp.now()]
+                    surp_col = next((c for c in past.columns if "surprise" in c.lower()), None)
+                    if surp_col:
+                        clean = past.dropna(subset=[surp_col])
+                        if not clean.empty:
+                            data["eps_surprise_pct"] = round(float(clean[surp_col].iloc[0]), 1)
+            except Exception:
+                pass
 
-    if run_signal:
-        _run_analysis(portfolio, file_key, force_full=False)
-        cached = _get_cached(file_key)
+            # earnings_history fallback
+            if data.get("eps_surprise_pct") is None:
+                try:
+                    eh = tk.earnings_history
+                    if eh is not None and not eh.empty:
+                        surp_col = next((c for c in eh.columns if "surprise" in c.lower() or "percent" in c.lower()), None)
+                        if surp_col is None and {"epsDifference", "epsEstimate"}.issubset(eh.columns):
+                            row = eh.dropna(subset=["epsDifference", "epsEstimate"]).iloc[0]
+                            est = float(row["epsEstimate"])
+                            if est != 0:
+                                data["eps_surprise_pct"] = round(float(row["epsDifference"]) / abs(est) * 100, 1)
+                        elif surp_col:
+                            clean = eh.dropna(subset=[surp_col])
+                            if not clean.empty:
+                                val = float(clean[surp_col].iloc[0])
+                                if abs(val) < 5:
+                                    val = round(val * 100, 1)
+                                data["eps_surprise_pct"] = round(val, 1)
+                except Exception:
+                    pass
 
-    if run_full:
-        _run_analysis(portfolio, file_key, force_full=True)
-        cached = _get_cached(file_key)
+            result[t] = {
+                "rec_key":            data.get("rec_key"),
+                "rec_mean":           round(data["rec_mean"], 1) if data.get("rec_mean") else None,
+                "n_analysts":         int(data["n_analysts"]) if data.get("n_analysts") else None,
+                "current_price":      round(float(data["current_price"]), 2) if data.get("current_price") else None,
+                "target_mean":        round(float(data["target_mean"]), 2) if data.get("target_mean") else None,
+                "target_high":        round(float(data["target_high"]), 2) if data.get("target_high") else None,
+                "target_low":         round(float(data["target_low"]), 2) if data.get("target_low") else None,
+                "target_upside_pct":  data.get("target_upside_pct"),
+                "earnings_date":      data.get("earnings_date"),
+                "earnings_days_left": data.get("earnings_days_left"),
+                "eps_surprise_pct":   data.get("eps_surprise_pct"),
+            }
 
-    if cached:
-        _render_signal_html(cached)
+        except Exception:
+            result[t] = {}
+
+    return result
 
 
 # ─────────────────────────────────────────────
-# 분석 실행
+# 뉴스 수집
 # ─────────────────────────────────────────────
 
-def _run_analysis(portfolio: Portfolio, file_key: str, force_full: bool = False):
-    api_key      = get_api_key()
-    holdings     = {t: s for t, s in portfolio.holdings.items() if s > 0}
-    total        = len(holdings)
-
-    # 스마트 캐시: 당일 기존 결과 로드 (강제 전체 재분석이 아닐 때)
-    cached_results = None
-    if not force_full:
-        cached_results = _get_cached(file_key)
-
-    progress_bar = st.progress(0)
-    status_text  = st.empty()
-
-    def on_progress(current, total, ticker, item):
-        pct = int(current / total * 100) if total > 0 else 0
-        progress_bar.progress(pct)
-        if ticker == "데이터 수집 중":
-            sources = []
-            if has_finnhub_key():
-                sources.append("Finnhub")
-            if has_marketaux_key():
-                sources.append("Marketaux")
-            if not sources:
-                sources.append("yfinance")
-            status_text.markdown(f"📡 **{'+'.join(sources)}**으로 **{total}개 종목** 뉴스 수집 중...")
-        elif ticker == "애널리스트 데이터 수집 중":
-            status_text.markdown("📊 **애널리스트** 데이터 수집 중...")
-        elif ticker == "AI 분석 중":
-            status_text.markdown("🤖 **Gemini AI** 분석 중...")
-        elif item is not None:
-            reused = item.get("reused_cache", False)
-            tag    = "📋 캐시" if reused else "✅ 완료"
-            status_text.markdown(f"{tag} **{ticker}** ({current}/{total})")
-        else:
-            status_text.markdown(f"🤖 **{ticker}** 분석 중... ({current}/{total})")
+def _fetch_finnhub(ticker: str, finnhub_key: str) -> tuple[list[dict], float | None]:
+    import requests
+    headers    = {"X-Finnhub-Token": finnhub_key}
+    articles   = []
+    change_pct = None
 
     try:
-        results = analyze_portfolio_signals(
-            holdings=holdings,
-            api_key=api_key,
-            finnhub_key=get_finnhub_key(),
-            marketaux_key=get_marketaux_key(),
-            progress_callback=on_progress,
-            portfolio=portfolio,
-            cached_results=cached_results,
+        r = requests.get(
+            "https://finnhub.io/api/v1/quote",
+            params={"symbol": ticker}, headers=headers, timeout=5,
         )
+        d    = r.json()
+        curr = d.get("c", 0)
+        prev = d.get("pc", 0)
+        if prev and prev > 0:
+            change_pct = round((curr - prev) / prev * 100, 2)
+    except Exception:
+        pass
 
-        if results:
-            now_kst  = get_kst_now()
-            kst_date = now_kst.strftime("%Y-%m-%d")
-            kst_time = now_kst.strftime("%H:%M:%S")
-            for res in results:
-                if not res.get("reused_cache"):
-                    res["analyzed_date"] = kst_date
-                    res["analyzed_time"] = kst_time
-
-    except Exception as e:
-        progress_bar.empty()
-        status_text.empty()
-        st.error(f"❌ 분석 오류: {e}")
-        return
-
-    progress_bar.progress(100)
-    reused_count   = sum(1 for r in results if r.get("reused_cache"))
-    analyzed_count = len(results) - reused_count
-    if reused_count > 0:
-        status_text.markdown(
-            f"✅ **분석 완료!** 재분석 {analyzed_count}개 · 캐시 재사용 {reused_count}개"
+    try:
+        today     = date.today()
+        from_date = (today - timedelta(days=3)).isoformat()
+        r = requests.get(
+            "https://finnhub.io/api/v1/company-news",
+            params={"symbol": ticker, "from": from_date, "to": today.isoformat()},
+            headers=headers, timeout=5,
         )
-    else:
-        status_text.markdown(f"✅ **분석 완료!** {len(results)}개 종목")
+        for item in r.json()[:3]:
+            headline = item.get("headline", "")
+            summary  = item.get("summary", "")
+            source   = item.get("source", "")
+            if headline:
+                articles.append({
+                    "title":      headline,
+                    "snippet":    summary[:400] if summary else "",
+                    "highlights": [],
+                    "source":     source,
+                    "sentiment":  None,
+                })
+    except Exception:
+        pass
 
-    if results:
-        _set_cached(file_key, results)
-    st.rerun()
+    return articles, change_pct
+
+
+def _fetch_marketaux(ticker: str, marketaux_key: str) -> list[dict]:
+    import requests
+    articles = []
+
+    try:
+        r = requests.get(
+            "https://api.marketaux.com/v1/news/all",
+            params={
+                "symbols":         ticker,
+                "filter_entities": "true",
+                "language":        "en",
+                "limit":           3,
+                "published_after": (date.today() - timedelta(days=3)).isoformat(),
+                "api_token":       marketaux_key,
+            },
+            timeout=8,
+        )
+        if r.status_code != 200:
+            return []
+
+        for art in r.json().get("data", [])[:3]:
+            title   = art.get("title", "")
+            desc    = art.get("description", "")
+            snippet = art.get("snippet", "")
+            source  = art.get("source", "")
+
+            sentiment       = None
+            highlight_texts = []
+            for ent in art.get("entities", []):
+                if ent.get("symbol", "").upper() == ticker.upper():
+                    sentiment = ent.get("sentiment_score")
+                    for h in ent.get("highlights", [])[:2]:
+                        txt = h.get("highlight", "").strip()
+                        if txt:
+                            highlight_texts.append(txt)
+                    break
+
+            # 본문: snippet 우선, 없으면 description
+            body = snippet[:400] if snippet else (desc[:300] if desc else "")
+
+            if title:
+                articles.append({
+                    "title":      title,
+                    "snippet":    body,
+                    "highlights": highlight_texts,
+                    "source":     source,
+                    "sentiment":  round(sentiment, 2) if sentiment is not None else None,
+                })
+    except Exception:
+        pass
+
+    return articles
+
+
+def _fetch_yfinance_fallback(ticker: str) -> tuple[list[dict], float | None]:
+    try:
+        import yfinance as yf
+        tk       = yf.Ticker(ticker)
+        articles = []
+        for item in (tk.news or [])[:3]:
+            title = (
+                item.get("title")
+                or item.get("content", {}).get("title")
+                or item.get("content", {}).get("summary", "")
+            )
+            title = str(title).strip()
+            if title and len(title) > 5:
+                articles.append({
+                    "title": title, "snippet": "",
+                    "highlights": [], "source": "", "sentiment": None,
+                })
+
+        change_pct = None
+        hist = tk.history(period="5d")
+        if len(hist) >= 2:
+            prev = float(hist["Close"].iloc[-2])
+            curr = float(hist["Close"].iloc[-1])
+            if prev > 0:
+                change_pct = round((curr - prev) / prev * 100, 2)
+
+        return articles, change_pct
+    except Exception:
+        return [], None
+
+
+def fetch_ticker_data(
+    ticker: str,
+    finnhub_key: str | None,
+    marketaux_key: str | None,
+) -> tuple[list[dict], float | None]:
+    finnhub_articles:   list[dict] = []
+    marketaux_articles: list[dict] = []
+    change_pct: float | None = None
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        futures = {}
+        if finnhub_key:
+            futures["finnhub"]   = ex.submit(_fetch_finnhub,   ticker, finnhub_key)
+        if marketaux_key:
+            futures["marketaux"] = ex.submit(_fetch_marketaux, ticker, marketaux_key)
+
+        for name, fut in futures.items():
+            try:
+                if name == "finnhub":
+                    finnhub_articles, change_pct = fut.result()
+                else:
+                    marketaux_articles = fut.result()
+            except Exception:
+                pass
+
+    if not finnhub_articles and not marketaux_articles:
+        return _fetch_yfinance_fallback(ticker)
+
+    # Marketaux 우선, Finnhub 보완 (제목 중복 제거)
+    seen:   set[str]   = set()
+    merged: list[dict] = []
+    for art in marketaux_articles + finnhub_articles:
+        key = art["title"][:40].lower()
+        if key not in seen:
+            seen.add(key)
+            merged.append(art)
+
+    return merged[:4], change_pct
 
 
 # ─────────────────────────────────────────────
-# HTML 렌더링
+# 프롬프트 빌더
 # ─────────────────────────────────────────────
 
-def _render_signal_html(signals: list[dict]):
-    """탭 전환 + 스와이프 카드 UI로 렌더링."""
+_SYSTEM_PROMPT = """당신은 미국 주식 포트폴리오 분석 AI입니다.
 
-    signals_json = json.dumps(signals, ensure_ascii=False)
+[분석 기준]
+- 뉴스와 애널리스트 데이터를 근거로 판단합니다
+- 뉴스가 없으면 애널리스트 데이터만으로 판단하고, 뉴스 내용을 추측하거나 창작하지 마세요
+- 애널리스트 데이터도 없으면 "정보 부족으로 판단 유보"라고 명시하세요
+- 상충하는 신호(예: 강력매수인데 현재가가 목표가 상회, 어닝 임박인데 직전 EPS 미스)가 있으면 반드시 언급하세요
+- 액션은 구체적 조건과 함께 제시하세요. "비중 유지" 단독 사용 금지
+- JSON 배열만 응답하세요. 코드블록, 설명 텍스트 절대 없이"""
 
-    html = f"""
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap');
-  * {{ margin:0; padding:0; box-sizing:border-box; }}
-  :root {{
-    --bg: #0f1117;
-    --surface: #1a1f2e;
-    --surface2: #222736;
-    --border: #2a3350;
-    --text: #e8eaf6;
-    --text-sub: #8892b0;
-    --text-muted: #4a5278;
-    --up: #ff6b6b;
-    --down: #4d9cf8;
-    --accent: #7c83f5;
-    --accent-soft: rgba(124,131,245,0.12);
-    --tag-bg: #1e2440;
-    --green: #4ade80;
-    --yellow: #fbbf24;
-  }}
-  body {{
-    font-family: 'Pretendard', -apple-system, sans-serif;
-    background: var(--bg); color: var(--text);
-    padding: 0 0 32px;
-  }}
 
-  /* ── 필터 탭 ── */
-  .filter-tabs {{
-    display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap;
-  }}
-  .filter-tab {{
-    padding: 6px 14px; border-radius: 20px; font-size: 12px;
-    font-weight: 500; cursor: pointer; border: 1px solid var(--border);
-    color: var(--text-sub); background: transparent;
-    font-family: inherit; transition: all 0.2s;
-  }}
-  .filter-tab.active {{
-    background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
-  }}
+def _format_news_block(articles: list[dict]) -> str:
+    if not articles:
+        return "없음"
+    lines = []
+    for art in articles[:3]:
+        title      = art.get("title", "")
+        snippet    = art.get("snippet", "")
+        source     = art.get("source", "")
+        highlights = art.get("highlights", [])
+        senti      = art.get("sentiment")
 
-  /* ── 카드 리스트 ── */
-  .signal-list {{
-    padding: 10px 16px; display: flex; flex-direction: column; gap: 8px;
-  }}
+        line = f"[{source}] {title}" if source else title
+        if snippet:
+            line += f"\n    본문: {snippet[:400]}"
+        if highlights:
+            line += f"\n    핵심구절: {' / '.join(highlights[:2])}"
+        if senti is not None:
+            label = "긍정" if senti > 0.2 else "부정" if senti < -0.2 else "중립"
+            line += f"\n    감성: {label}({senti:+.2f})"
+        lines.append(line)
+    return "\n".join(lines)
 
-  /* ── 카드 (닫힌 상태) ── */
-  .signal-card {{
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 14px; padding: 13px 14px;
-    cursor: pointer; transition: all 0.2s;
-    display: flex; align-items: center; gap: 11px;
-    position: relative; overflow: hidden;
-  }}
-  .signal-card::before {{
-    content:''; position:absolute; left:0; top:0; bottom:0;
-    width:3px; border-radius:14px 0 0 14px;
-  }}
-  .signal-card.up::before    {{ background: var(--up); }}
-  .signal-card.down::before  {{ background: var(--down); }}
-  .signal-card.neutral::before {{ background: var(--text-muted); }}
-  .signal-card:hover {{ border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124,131,245,0.1); }}
-  .signal-card.open  {{ border-radius: 14px 14px 0 0; border-color: var(--accent); border-bottom-color: transparent; }}
 
-  /* ── 로고 ── */
-  .ticker-icon {{
-    width: 38px; height: 38px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; flex-shrink: 0; color: white;
-  }}
+def _analyst_conflict(ana: dict) -> str:
+    """애널리스트 데이터 내 상충 신호 사전 감지."""
+    signals = []
+    rec = ana.get("rec_key", "")
+    up  = ana.get("target_upside_pct")
+    ed  = ana.get("earnings_days_left")
+    eps = ana.get("eps_surprise_pct")
 
-  /* ── 카드 본문 ── */
-  .card-body {{ flex:1; min-width:0; }}
-  .card-row1 {{
-    display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;
-  }}
-  .ticker-name {{ font-size:15px; font-weight:600; }}
-  .ticker-sub  {{ font-size:11px; color:var(--text-muted); margin-left:5px; font-weight:400; }}
-  .card-meta   {{ display:flex; align-items:center; gap:8px; }}
-  .rec-badge {{
-    font-size:10px; font-weight:700; padding:2px 7px;
-    border-radius:5px; letter-spacing:0.3px;
-  }}
-  .rec-buy     {{ background:rgba(74,222,128,0.15); color:var(--green); border:1px solid rgba(74,222,128,0.3); }}
-  .rec-hold    {{ background:rgba(251,191,36,0.15);  color:var(--yellow);border:1px solid rgba(251,191,36,0.3); }}
-  .rec-sell    {{ background:rgba(255,107,107,0.15); color:var(--up);   border:1px solid rgba(255,107,107,0.3); }}
-  .rec-none    {{ background:var(--tag-bg); color:var(--text-muted); border:1px solid var(--border); }}
+    if rec and "BUY" in rec and up is not None and up < -5:
+        signals.append(f"⚠️ {rec} 의견이나 현재가가 목표주가를 {abs(up):.1f}% 상회 — 주가 선반영 또는 목표가 미업데이트 가능성")
+    if ed is not None and 0 <= ed <= 7:
+        signals.append(f"🔔 실적 발표 D-{ed} — 발표 전후 변동성 확대 구간, 포지션 주의")
+    if eps is not None and eps < -10:
+        signals.append(f"⚠️ 직전 EPS {eps:+.1f}% 미스 — 실적 신뢰도 하락, 이번 어닝 리스크 존재")
+    if eps is not None and eps > 20 and ed is not None and ed > 0:
+        signals.append(f"✅ 직전 EPS {eps:+.1f}% 서프라이즈 — 이번 어닝 기대감 유효")
+    if rec and "SELL" in rec and up is not None and up > 5:
+        signals.append(f"⚠️ 매도 의견이나 목표가 상승여력 {up:.1f}% — 애널리스트 간 의견 분화 가능성")
 
-  .card-row2 {{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:2px; }}
-  .card-reason {{
-    font-size:12px; color:var(--text-sub); flex:1;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  }}
-  .card-right  {{ display:flex; align-items:center; gap:8px; flex-shrink:0; }}
-  .change-badge {{ font-size:13px; font-weight:700; }}
-  .change-badge.up      {{ color:var(--up); }}
-  .change-badge.down    {{ color:var(--down); }}
-  .change-badge.neutral {{ color:var(--text-muted); }}
-  .card-chips  {{ display:flex; gap:4px; margin-top:5px; flex-wrap:wrap; }}
-  .chip {{
-    font-size:10px; padding:2px 7px; border-radius:5px;
-    background:var(--tag-bg); color:var(--text-muted); border:1px solid var(--border);
-  }}
-  .chip.warn {{ background:rgba(255,107,107,0.1); color:#ff9999; border-color:rgba(255,107,107,0.25); }}
-  .chip.good {{ background:rgba(74,222,128,0.1);  color:#86efac; border-color:rgba(74,222,128,0.25); }}
+    return "\n  ".join(signals) if signals else "없음"
 
-  .card-arrow {{ color:var(--text-muted); font-size:16px; flex-shrink:0; transition:transform 0.2s; }}
-  .card-arrow.open {{ transform:rotate(90deg); }}
 
-  /* ── 상세 패널 ── */
-  .detail-wrap {{
-    background:var(--surface2); border:1px solid var(--accent);
-    border-top:none; border-radius:0 0 14px 14px;
-    overflow:hidden;
-  }}
+def _build_batch_prompt(
+    holdings: dict,
+    data_map: dict,
+    analyst_ctx: dict,
+) -> str:
+    items = []
+    for ticker, shares in holdings.items():
+        articles, change_pct = data_map.get(ticker, ([], None))
+        ana = analyst_ctx.get(ticker, {})
 
-  /* 탭 헤더 */
-  .dtab-header {{
-    display:flex; border-bottom:1px solid var(--border);
-  }}
-  .dtab-btn {{
-    flex:1; padding:10px 0; font-size:12px; font-weight:600;
-    text-align:center; cursor:pointer; color:var(--text-muted);
-    background:transparent; border:none; font-family:inherit;
-    border-bottom:2px solid transparent; transition:all 0.2s;
-    margin-bottom:-1px;
-  }}
-  .dtab-btn.active {{ color:var(--accent); border-bottom-color:var(--accent); }}
+        change_str = f"{change_pct:+.2f}%" if change_pct is not None else "N/A"
 
-  /* 탭 콘텐츠 */
-  .dtab-content {{ display:none; padding:14px 16px; }}
-  .dtab-content.active {{ display:block; }}
+        # 애널리스트 블록
+        ana_parts = []
+        if ana.get("rec_key"):
+            n_str = f" ({ana['n_analysts']}명)" if ana.get("n_analysts") else ""
+            ana_parts.append(f"투자의견:{ana['rec_key']}{n_str}")
+        if ana.get("target_mean") and ana.get("current_price"):
+            up = ana.get("target_upside_pct")
+            up_str = f"({up:+.1f}%)" if up is not None else ""
+            ana_parts.append(f"목표주가:${ana['target_mean']}{up_str} / 현재가:${ana['current_price']}")
+        if ana.get("target_high") and ana.get("target_low"):
+            ana_parts.append(f"목표가범위:${ana['target_low']}~${ana['target_high']}")
+        if ana.get("earnings_days_left") is not None:
+            d = ana["earnings_days_left"]
+            label = f"D+{abs(d)}발표완료" if d < 0 else f"D-{d}발표예정"
+            ana_parts.append(f"어닝:{label}({ana.get('earnings_date','')})")
+        if ana.get("eps_surprise_pct") is not None:
+            ana_parts.append(f"직전EPS서프라이즈:{ana['eps_surprise_pct']:+.1f}%")
+        ana_str = "\n  ".join(ana_parts) if ana_parts else "없음"
 
-  /* AI 의견 탭 */
-  .ai-summary {{
-    background:var(--accent-soft); border:1px solid var(--border);
-    border-radius:10px; padding:11px 13px; margin-bottom:12px;
-    font-size:13px; color:var(--text); line-height:1.55; font-weight:500;
-  }}
-  .bullet-list {{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }}
-  .bullet-item {{ display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--text-sub); line-height:1.5; }}
-  .bullet-label {{
-    font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px;
-    flex-shrink:0; margin-top:1px;
-  }}
-  .bullet-label.q {{ background:rgba(124,131,245,0.2); color:#a5b4fc; }}
-  .bullet-label.n {{ background:rgba(74,222,128,0.15); color:#86efac; }}
-  .bullet-label.a {{ background:rgba(251,191,36,0.15);  color:#fde68a; }}
-  .tag-row {{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }}
-  .tag {{
-    padding:3px 8px; background:var(--tag-bg); border:1px solid var(--border);
-    border-radius:6px; font-size:11px; color:var(--text-sub);
-  }}
+        conflict  = _analyst_conflict(ana)
+        news_str  = _format_news_block(articles)
+        news_note = "" if articles else "\n  (뉴스 없음 — 뉴스 기반 언급 금지, 애널리스트 데이터만으로 판단)"
 
-  /* 애널리스트 탭 */
-  .ana-grid {{
-    display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;
-  }}
-  .ana-card {{
-    background:var(--surface); border:1px solid var(--border);
-    border-radius:10px; padding:10px 12px;
-  }}
-  .ana-label {{ font-size:10px; color:var(--text-muted); margin-bottom:3px; }}
-  .ana-value {{ font-size:15px; font-weight:700; color:var(--text); }}
-  .ana-sub   {{ font-size:11px; color:var(--text-muted); margin-top:2px; }}
-  .ana-up    {{ color:var(--green); }}
-  .ana-down  {{ color:var(--up); }}
-  .earning-bar {{
-    background:var(--surface); border:1px solid var(--border);
-    border-radius:10px; padding:10px 14px;
-    display:flex; align-items:center; justify-content:space-between;
-  }}
-  .earning-left  {{ font-size:12px; color:var(--text-sub); }}
-  .earning-right {{ font-size:13px; font-weight:700; }}
-  .earning-right.soon {{ color:var(--yellow); }}
-  .earning-right.past {{ color:var(--text-muted); }}
+        items.append(
+            f"[{ticker}] {shares:.1f}주 | 전일대비:{change_str}\n"
+            f"  애널리스트:\n  {ana_str}\n"
+            f"  사전감지신호:{conflict}\n"
+            f"  뉴스:{news_note}\n  {news_str}"
+        )
 
-  /* 연관기업 */
-  .related-section {{ border-top:1px solid var(--border); padding-top:10px; margin-top:4px; }}
-  .related-title {{ font-size:12px; font-weight:600; color:var(--text-sub); margin-bottom:7px; }}
-  .related-item {{
-    background:var(--surface); border:1px solid var(--border);
-    border-radius:9px; padding:8px 11px; margin-bottom:6px;
-  }}
-  .related-ticker {{ font-size:13px; font-weight:600; color:var(--accent); }}
-  .related-reason {{ font-size:11px; color:var(--text-muted); margin-top:2px; line-height:1.4; }}
+    tickers_list = list(holdings.keys())
+    return (
+        f"포트폴리오 {len(holdings)}개 종목 분석:\n\n"
+        + "\n\n".join(items)
+        + f"""
 
-  /* 뉴스 탭 */
-  .news-item {{
-    padding:10px 0; border-bottom:1px solid var(--border);
-  }}
-  .news-item:last-child {{ border-bottom:none; }}
-  .news-source {{ font-size:10px; color:var(--accent); font-weight:600; margin-bottom:3px; }}
-  .news-title  {{ font-size:12px; color:var(--text-sub); line-height:1.45; margin-bottom:4px; }}
-  .news-snippet {{ font-size:11px; color:var(--text-muted); line-height:1.45; }}
-  .news-senti  {{ display:inline-block; font-size:10px; padding:1px 6px; border-radius:4px; margin-top:4px; }}
-  .news-senti.pos {{ background:rgba(74,222,128,0.15);  color:#86efac; }}
-  .news-senti.neg {{ background:rgba(255,107,107,0.15); color:#ff9999; }}
-  .news-senti.neu {{ background:var(--tag-bg); color:var(--text-muted); }}
+JSON 배열로만 응답 (코드블록 없이):
+[{{"ticker":"종목","signal":"up/down/neutral","reason":"핵심판단40자이내","bullets":["뉴스해석","애널리스트해석(상충신호포함)","조건부액션"],"tags":["태그1","태그2"],"related":[{{"ticker":"관련기업","reason":"연관이유"}}]}}]
 
-  /* 오류 */
-  .no-signal {{ font-size:13px; color:var(--text-muted); padding:16px 0; text-align:center; }}
+rules:
+- 한국어
+- signal: 뉴스+애널리스트 종합. 상충 신호 있으면 neutral
+- reason: 40자 이내, 가장 핵심적인 판단 한 문장
+- bullets 정확히 3개:
+  ①뉴스해석: 뉴스 본문 내용 기반 해석. 뉴스 없으면 "최근 유의미한 뉴스 없음"
+  ②애널리스트: 투자의견·목표가·어닝·EPS 종합 해석. 사전감지신호 반드시 반영
+  ③조건부액션: "~확인되면 비중확대 / ~시 일부 축소" 형식. 조건 없는 단순 유지 금지
+- related: 직접 연관된 실제 기업 1~2개 (공급사/경쟁사/파트너), 없으면[]
+- 반드시 {len(holdings)}개 전부 포함: {', '.join(tickers_list)}"""
+    )
 
-  /* 빈 상태 */
-  .empty-state {{ text-align:center; padding:40px 20px; color:var(--text-muted); }}
-  .empty-state .icon {{ font-size:36px; margin-bottom:10px; }}
 
-  @keyframes fadeUp {{
-    from {{ opacity:0; transform:translateY(8px); }}
-    to   {{ opacity:1; transform:translateY(0); }}
-  }}
-</style>
-</head>
-<body>
+# ─────────────────────────────────────────────
+# Gemini 호출
+# ─────────────────────────────────────────────
 
-<div class="filter-tabs">
-  <button class="filter-tab active" onclick="setFilter(this,'all')">전체</button>
-  <button class="filter-tab" onclick="setFilter(this,'up')">상승</button>
-  <button class="filter-tab" onclick="setFilter(this,'down')">하락</button>
-  <button class="filter-tab" onclick="setFilter(this,'neutral')">중립</button>
-</div>
+def _gemini_batch(
+    holdings: dict,
+    data_map: dict,
+    analyst_ctx: dict,
+    api_key: str,
+) -> dict[str, dict]:
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        model_name="gemini-2.5-flash-lite",
+        system_instruction=_SYSTEM_PROMPT,
+    )
+    response = model.generate_content(
+        _build_batch_prompt(holdings, data_map, analyst_ctx)
+    )
+    raw = response.text.strip()
+    raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
 
-<div class="signal-list" id="signalList"></div>
+    results_list = json.loads(raw)
+    result_map   = {}
+    for item in results_list:
+        ticker = item.get("ticker", "")
+        if not ticker:
+            continue
+        _, change_pct = data_map.get(ticker, ([], None))
+        if change_pct is not None and abs(change_pct) >= 2.0:
+            item["signal"] = "up" if change_pct > 0 else "down"
+        item.setdefault("signal", "neutral")
+        item.setdefault("reason", "분석 정보 없음")
+        item.setdefault("bullets", ["정보 없음"] * 3)
+        item.setdefault("tags", [])
+        item.setdefault("related", [])
+        while len(item["bullets"]) < 3:
+            item["bullets"].append("추가 정보 없음")
+        item["bullets"] = item["bullets"][:3]
+        result_map[ticker] = item
 
-<script>
-const RAW_DATA = {signals_json};
+    return result_map
 
-const COLORS = [
-  "#3949ab","#1e88e5","#00acc1","#43a047",
-  "#fb8c00","#e53935","#8e24aa","#00897b","#f4511e","#6d4c41",
-  "#546e7a","#c0ca33","#26a69a","#ec407a","#7c83f5"
-];
-const TICKER_COLORS = {{
-  AAPL:"#555",MSFT:"#0078d4",NVDA:"#76b900",AMZN:"#ff9900",
-  GOOGL:"#4285f4",META:"#1877f2",TSLA:"#cc0000",
-}};
 
-function tickerColor(t, i) {{ return TICKER_COLORS[t] || COLORS[i % COLORS.length]; }}
+def _gemini_single(
+    ticker: str,
+    shares: float,
+    articles: list[dict],
+    change_pct: float | None,
+    analyst_ctx: dict,
+    api_key: str,
+) -> dict:
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        model_name="gemini-2.5-flash-lite",
+        system_instruction=_SYSTEM_PROMPT,
+    )
+    change_str = f"{change_pct:+.2f}%" if change_pct is not None else "N/A"
+    news_str   = _format_news_block(articles)
+    ana        = analyst_ctx.get(ticker, {})
 
-function tickerIconHtml(ticker, idx, logoUrl) {{
-  const color = tickerColor(ticker, idx);
-  if (logoUrl) {{
-    return `<div class="ticker-icon" style="background:#1a1f2e;overflow:hidden">
-      <img src="${{logoUrl}}" alt="${{ticker}}"
-           style="width:100%;height:100%;object-fit:contain;padding:5px;"
-           onerror="this.parentElement.style.background='${{color}}';this.parentElement.innerHTML='${{ticker.slice(0,2)}}'">
-    </div>`;
-  }}
-  return `<div class="ticker-icon" style="background:${{color}}">${{ticker.slice(0,2)}}</div>`;
-}}
+    ana_parts = []
+    if ana.get("rec_key"):
+        ana_parts.append(f"투자의견:{ana['rec_key']}")
+    if ana.get("target_upside_pct") is not None:
+        ana_parts.append(f"목표가괴리:{ana['target_upside_pct']:+.1f}%")
+    if ana.get("earnings_days_left") is not None:
+        d = ana["earnings_days_left"]
+        ana_parts.append(f"어닝:{'D+'+str(abs(d))+'완료' if d<0 else 'D-'+str(d)+'예정'}")
+    if ana.get("eps_surprise_pct") is not None:
+        ana_parts.append(f"직전EPS:{ana['eps_surprise_pct']:+.1f}%")
+    ana_str  = " | ".join(ana_parts) if ana_parts else "없음"
+    conflict = _analyst_conflict(ana)
+    news_note = "" if articles else " (뉴스 없음 — 추측 금지)"
 
-let currentFilter = "all";
-let openTicker    = null;
-let openTab       = {{}};  // ticker → 'ai'|'analyst'|'news'
+    prompt = (
+        f"종목:{ticker} ({shares:.1f}주) | 전일대비:{change_str}\n"
+        f"애널리스트: {ana_str}\n"
+        f"사전감지신호: {conflict}\n"
+        f"뉴스:{news_note}\n{news_str}\n\n"
+        f'JSON:{{"signal":"up/down/neutral","reason":"40자이내","bullets":["뉴스해석","애널리스트해석(상충포함)","조건부액션"],"tags":["태그1"],"related":[]}}'
+    )
 
-function setFilter(el, f) {{
-  document.querySelectorAll(".filter-tab").forEach(t => t.classList.remove("active"));
-  el.classList.add("active");
-  currentFilter = f;
-  renderList();
-}}
+    response = model.generate_content(prompt)
+    raw = response.text.strip()
+    raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
+    result = json.loads(raw)
 
-function toggleCard(ticker) {{
-  openTicker = openTicker === ticker ? null : ticker;
-  if (openTicker && !openTab[ticker]) openTab[ticker] = "ai";
-  renderList();
-}}
+    if change_pct is not None and abs(change_pct) >= 2.0:
+        result["signal"] = "up" if change_pct > 0 else "down"
+    result.setdefault("signal", "neutral")
+    result.setdefault("reason", "분석 정보 없음")
+    result.setdefault("bullets", ["정보 없음"] * 3)
+    result.setdefault("tags", [])
+    result.setdefault("related", [])
+    while len(result["bullets"]) < 3:
+        result["bullets"].append("추가 정보 없음")
+    result["bullets"] = result["bullets"][:3]
+    return result
 
-function switchTab(ticker, tab, e) {{
-  e.stopPropagation();
-  openTab[ticker] = tab;
-  renderList();
-}}
 
-function getSignalClass(item) {{
-  const sig = item?.signal?.signal || "neutral";
-  return sig === "up" ? "up" : sig === "down" ? "down" : "neutral";
-}}
+# ─────────────────────────────────────────────
+# 스마트 캐시
+# ─────────────────────────────────────────────
 
-function recBadgeHtml(rec) {{
-  if (!rec) return `<span class="rec-badge rec-none">N/A</span>`;
-  const r = rec.toUpperCase();
-  const cls = r.includes("BUY") ? "rec-buy" : r.includes("SELL") ? "rec-sell" : "rec-hold";
-  const label = r === "STRONG_BUY" ? "강력매수" : r === "BUY" ? "매수" :
-                r === "HOLD" ? "보유" : r === "SELL" ? "매도" :
-                r === "UNDERPERFORM" ? "매도" : rec;
-  return `<span class="rec-badge ${{cls}}">${{label}}</span>`;
-}}
+REANALYZE_THRESHOLD = 0.5
 
-function earningChipHtml(ana) {{
-  if (ana?.earnings_days_left == null) return "";
-  const d = ana.earnings_days_left;
-  if (d < 0)  return `<span class="chip">어닝 D+${{Math.abs(d)}} 발표완료</span>`;
-  if (d <= 7) return `<span class="chip warn">🔔 어닝 D-${{d}}</span>`;
-  if (d <= 30) return `<span class="chip">어닝 D-${{d}}</span>`;
-  return "";
-}}
 
-function upsideChipHtml(ana) {{
-  if (ana?.target_upside_pct == null) return "";
-  const u = ana.target_upside_pct;
-  const cls = u > 15 ? "good" : u < -5 ? "warn" : "";
-  return `<span class="chip ${{cls}}">목표가 ${{u > 0 ? "+" : ""}}${{u.toFixed(1)}}%</span>`;
-}}
+def _needs_reanalysis(
+    ticker: str,
+    change_pct: float | None,
+    cached_results: list[dict],
+) -> bool:
+    if change_pct is None:
+        return True
+    if abs(change_pct) >= REANALYZE_THRESHOLD:
+        return True
+    return ticker not in {r["ticker"] for r in cached_results}
 
-function renderList() {{
-  const list = document.getElementById("signalList");
-  let data = RAW_DATA;
-  if (currentFilter === "up")      data = data.filter(d => getSignalClass(d) === "up");
-  if (currentFilter === "down")    data = data.filter(d => getSignalClass(d) === "down");
-  if (currentFilter === "neutral") data = data.filter(d => getSignalClass(d) === "neutral");
 
-  if (!data.length) {{
-    list.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>해당하는 시그널이 없어요</p></div>`;
-    return;
-  }}
+# ─────────────────────────────────────────────
+# 메인 분석
+# ─────────────────────────────────────────────
 
-  list.innerHTML = data.map((item, i) => {{
-    const ticker   = item.ticker;
-    const sigClass = getSignalClass(item);
-    const change   = item.change_pct != null ? parseFloat(item.change_pct) : null;
-    const changeStr = change != null ? (change >= 0 ? "+" : "") + change.toFixed(2) + "%" : "N/A";
-    // 화살표는 등락률 기준 (Gemini signal과 독립)
-    const changeCls = change == null ? "neutral" : change > 0 ? "up" : change < 0 ? "down" : "neutral";
-    const arrow     = changeCls === "up" ? "▲" : changeCls === "down" ? "▼" : "—";
-    const reason   = item.signal?.reason || "분석 정보 없음";
-    const logoUrl  = item.logo_url || null;
-    const ana      = item.analyst || {{}};
-    const isOpen   = openTicker === ticker;
+def analyze_portfolio_signals(
+    holdings: dict[str, float],
+    api_key: str,
+    finnhub_key: str | None = None,
+    marketaux_key: str | None = None,
+    progress_callback=None,
+    portfolio=None,
+    cached_results: list[dict] | None = None,
+) -> list[dict]:
+    holdings = {t: s for t, s in holdings.items() if s > 0}
+    tickers  = list(holdings.keys())
+    total    = len(tickers)
 
-    const detail = isOpen ? renderDetail(item, i) : "";
+    from datetime import datetime
+    today    = date.today().isoformat()
+    now_time = datetime.now().strftime("%H:%M")
 
-    return `
-      <div style="animation:fadeUp 0.22s ease ${{i*0.04}}s both">
-        <div class="signal-card ${{sigClass}}${{isOpen ? " open" : ""}}"
-             onclick="toggleCard('${{ticker}}')">
-          ${{tickerIconHtml(ticker, i, logoUrl)}}
-          <div class="card-body">
-            <div class="card-row1">
-              <span class="ticker-name">${{ticker}}<span class="ticker-sub">${{item.shares?.toFixed(2)}}주</span></span>
-              <span class="change-badge ${{changeCls}}">${{arrow}} ${{changeStr}}</span>
-            </div>
-            <div class="card-row2">
-              <span class="card-reason">${{reason}}</span>
-              ${{recBadgeHtml(ana.rec_key)}}
-            </div>
-            <div class="card-chips">
-              ${{earningChipHtml(ana)}}
-              ${{upsideChipHtml(ana)}}
-            </div>
-          </div>
-          <div class="card-arrow${{isOpen ? " open" : ""}}">›</div>
-        </div>
-        ${{detail}}
-      </div>`;
-  }}).join("");
-}}
+    # ── 1단계: 뉴스+시세 병렬 수집 ─────────────────────────────
+    if progress_callback:
+        progress_callback(0, total, "데이터 수집 중", None)
 
-function renderDetail(item, idx) {{
-  if (!item.signal || item.signal._error) {{
-    const msg = item.signal?._error || "AI 분석 실패";
-    return `<div class="detail-wrap"><div class="no-signal">⚠️ ${{msg}}</div></div>`;
-  }}
+    data_map: dict[str, tuple[list[dict], float | None]] = {}
+    with ThreadPoolExecutor(max_workers=min(10, total)) as executor:
+        futures = {
+            executor.submit(fetch_ticker_data, t, finnhub_key, marketaux_key): t
+            for t in tickers
+        }
+        for future in as_completed(futures):
+            t = futures[future]
+            try:
+                data_map[t] = future.result()
+            except Exception:
+                data_map[t] = ([], None)
 
-  const ticker  = item.ticker;
-  const tab     = openTab[ticker] || "ai";
-  const sig     = item.signal;
-  const ana     = item.analyst || {{}};
-  const articles = item.articles || [];
+    # ── 2단계: 애널리스트 데이터 수집 ───────────────────────────
+    if progress_callback:
+        progress_callback(0, total, "애널리스트 데이터 수집 중", None)
 
-  // ── 탭 헤더 ──────────────────────────────────────────
-  const tabs = [
-    {{ id:"ai",      label:"💡 AI 의견" }},
-    {{ id:"analyst", label:"📊 애널리스트" }},
-    {{ id:"news",    label:"📰 뉴스" }},
-  ];
-  const headerHtml = `<div class="dtab-header">
-    ${{tabs.map(t => `<button class="dtab-btn${{tab===t.id?" active":""}}"
-      onclick="switchTab('${{ticker}}','${{t.id}}',event)">${{t.label}}</button>`).join("")}}
-  </div>`;
+    analyst_ctx = fetch_analyst_data(tickers)
 
-  // ── AI 탭 ─────────────────────────────────────────────
-  const bullets = sig.bullets || [];
-  const labels  = ["퀀트","뉴스","액션"];
-  const lclass  = ["q","n","a"];
-  const bulletsHtml = bullets.map((b, i) => `
-    <div class="bullet-item">
-      <span class="bullet-label ${{lclass[i] || 'q'}}">${{labels[i] || ""}}</span>
-      <span>${{b}}</span>
-    </div>`).join("");
-  const tags    = sig.tags || [];
-  const tagsHtml = tags.map(t => `<div class="tag">${{t}}</div>`).join("");
-  const related = sig.related || [];
-  const relatedHtml = related.length > 0
-    ? `<div class="related-section">
-         <div class="related-title">🔗 연관 기업</div>
-         ${{related.map(r => `
-           <div class="related-item">
-             <div class="related-ticker">${{r.ticker}}</div>
-             <div class="related-reason">${{r.reason}}</div>
-           </div>`).join("")}}
-       </div>` : "";
-  const aiContent = `
-    <div class="dtab-content${{tab==="ai"?" active":""}}">
-      <div class="ai-summary">${{reason_full(sig)}}</div>
-      <div class="bullet-list">${{bulletsHtml}}</div>
-      <div class="tag-row">${{tagsHtml}}</div>
-      ${{relatedHtml}}
-    </div>`;
+    # ── 3단계: 스마트 캐시 분리 ─────────────────────────────────
+    cached_map: dict[str, dict] = {}
+    if cached_results:
+        for r in cached_results:
+            cached_map[r["ticker"]] = r
 
-  // ── 애널리스트 탭 ──────────────────────────────────────
-  const recLabel = ana.rec_key
-    ? ({{ "STRONG_BUY":"강력 매수","BUY":"매수","HOLD":"보유",
-          "SELL":"매도","UNDERPERFORM":"매도" }}[ana.rec_key] || ana.rec_key)
-    : "—";
-  const nAna = ana.n_analysts ? `${{ana.n_analysts}}명` : "";
-  const recColor = ana.rec_key?.includes("BUY") ? "ana-up" :
-                   ana.rec_key?.includes("SELL") ? "ana-down" : "";
-  const upside = ana.target_upside_pct;
-  const upClass = upside != null ? (upside > 0 ? "ana-up" : "ana-down") : "";
-  const upStr   = upside != null ? `${{upside > 0 ? "+" : ""}}${{upside.toFixed(1)}}%` : "—";
+    reanalyze_tickers: list[str] = []
+    keep_tickers:      list[str] = []
 
-  const epsSurp = ana.eps_surprise_pct;
-  const epsCls  = epsSurp != null ? (epsSurp > 0 ? "ana-up" : "ana-down") : "";
-  const epsStr  = epsSurp != null ? `${{epsSurp > 0 ? "+" : ""}}${{epsSurp.toFixed(1)}}%` : "—";
+    for t in tickers:
+        _, change_pct = data_map.get(t, ([], None))
+        if _needs_reanalysis(t, change_pct, cached_results or []):
+            reanalyze_tickers.append(t)
+        else:
+            keep_tickers.append(t)
 
-  let earningHtml = "";
-  if (ana.earnings_date) {{
-    const d = ana.earnings_days_left;
-    const label = d < 0 ? `D+${{Math.abs(d)}} 발표완료` : `D-${{d}} 발표예정`;
-    const cls   = d != null && d <= 14 && d >= 0 ? "soon" : "past";
-    earningHtml = `
-      <div class="earning-bar">
-        <span class="earning-left">📅 실적 발표</span>
-        <span class="earning-right ${{cls}}">${{ana.earnings_date}} · ${{label}}</span>
-      </div>`;
-  }}
+    # ── 4단계: Gemini 배치 분석 ─────────────────────────────────
+    signal_map: dict[str, dict] = {}
 
-  const analystContent = `
-    <div class="dtab-content${{tab==="analyst"?" active":""}}">
-      <div class="ana-grid">
-        <div class="ana-card">
-          <div class="ana-label">투자의견</div>
-          <div class="ana-value ${{recColor}}">${{recLabel}}</div>
-          <div class="ana-sub">${{nAna}} 애널리스트</div>
-        </div>
-        <div class="ana-card">
-          <div class="ana-label">목표주가 상승여력</div>
-          <div class="ana-value ${{upClass}}">${{upStr}}</div>
-          <div class="ana-sub">${{ana.target_mean ? "$" + ana.target_mean : "—"}}</div>
-        </div>
-        <div class="ana-card">
-          <div class="ana-label">직전 EPS 서프라이즈</div>
-          <div class="ana-value ${{epsCls}}">${{epsStr}}</div>
-          <div class="ana-sub">전분기 대비</div>
-        </div>
-        <div class="ana-card">
-          <div class="ana-label">목표가 범위</div>
-          <div class="ana-value" style="font-size:12px">
-            ${{ana.target_low ? "$"+ana.target_low : "—"}} ~ ${{ana.target_high ? "$"+ana.target_high : "—"}}
-          </div>
-          <div class="ana-sub">Low ~ High</div>
-        </div>
-      </div>
-      ${{earningHtml}}
-    </div>`;
+    for t in keep_tickers:
+        if t in cached_map:
+            signal_map[t] = cached_map[t].get("signal", {})
 
-  // ── 뉴스 탭 ────────────────────────────────────────────
-  const newsItems = articles.length > 0
-    ? articles.slice(0, 5).map(a => {{
-        const senti = a.sentiment;
-        const scls  = senti != null ? (senti > 0.2 ? "pos" : senti < -0.2 ? "neg" : "neu") : "";
-        const slabel = senti != null ? (senti > 0.2 ? "긍정" : senti < -0.2 ? "부정" : "중립") : "";
-        return `<div class="news-item">
-          ${{a.source ? `<div class="news-source">${{a.source}}</div>` : ""}}
-          <div class="news-title">${{a.title || ""}}</div>
-          ${{a.snippet ? `<div class="news-snippet">${{a.snippet.slice(0,150)}}</div>` : ""}}
-          ${{scls ? `<span class="news-senti ${{scls}}">${{slabel}}</span>` : ""}}
-        </div>`;
-      }}).join("")
-    : `<div class="no-signal">최근 뉴스 없음</div>`;
+    if reanalyze_tickers:
+        if progress_callback:
+            progress_callback(1, total, "AI 분석 중", None)
 
-  const newsContent = `<div class="dtab-content${{tab==="news"?" active":""}}">
-    ${{newsItems}}
-  </div>`;
+        re_holdings = {t: holdings[t]     for t in reanalyze_tickers}
+        re_data     = {t: data_map[t]     for t in reanalyze_tickers}
+        re_analyst  = {t: analyst_ctx.get(t, {}) for t in reanalyze_tickers}
 
-  return `<div class="detail-wrap">
-    ${{headerHtml}}
-    ${{aiContent}}
-    ${{analystContent}}
-    ${{newsContent}}
-  </div>`;
-}}
+        try:
+            batch_result = _gemini_batch(re_holdings, re_data, re_analyst, api_key)
+            signal_map.update(batch_result)
+        except Exception:
+            if progress_callback:
+                progress_callback(1, total, "배치 실패, 순차 분석 중...", None)
+            for i, t in enumerate(reanalyze_tickers):
+                articles, change_pct = re_data.get(t, ([], None))
+                try:
+                    signal_map[t] = _gemini_single(
+                        t, holdings[t], articles, change_pct, re_analyst, api_key
+                    )
+                except Exception as e2:
+                    signal_map[t] = {"_error": str(e2)}
+                if progress_callback:
+                    progress_callback(i + 1, len(reanalyze_tickers), t, None)
 
-function reason_full(sig) {{
-  // reason이 짧으면 bullets[2](액션시사점)도 붙여서 표시
-  const r = sig.reason || "";
-  return r;
-}}
+    # ── 5단계: 결과 조합 ─────────────────────────────────────────
+    results = []
+    for ticker in tickers:
+        articles, change_pct = data_map.get(ticker, ([], None))
+        headlines = [a["title"] for a in articles if a.get("title")]
 
-renderList();
-</script>
-</body>
-</html>
-"""
+        if ticker in keep_tickers and ticker in cached_map:
+            old = cached_map[ticker].copy()
+            old["change_pct"]   = change_pct
+            old["reused_cache"] = True
+            results.append(old)
+        else:
+            ana  = analyst_ctx.get(ticker, {})
+            item = {
+                "ticker":        ticker,
+                "shares":        holdings[ticker],
+                "change_pct":    change_pct,
+                "headlines":     headlines,
+                "articles":      articles,
+                "signal":        signal_map.get(ticker, {"_error": "분석 결과 없음"}),
+                "logo_url":      portfolio.get_logo(ticker) if portfolio else None,
+                "analyzed_date": today,
+                "analyzed_time": now_time,
+                "reused_cache":  False,
+                "analyst": {
+                    "rec_key":            ana.get("rec_key"),
+                    "rec_mean":           ana.get("rec_mean"),
+                    "n_analysts":         ana.get("n_analysts"),
+                    "current_price":      ana.get("current_price"),
+                    "target_mean":        ana.get("target_mean"),
+                    "target_high":        ana.get("target_high"),
+                    "target_low":         ana.get("target_low"),
+                    "target_upside_pct":  ana.get("target_upside_pct"),
+                    "earnings_date":      ana.get("earnings_date"),
+                    "earnings_days_left": ana.get("earnings_days_left"),
+                    "eps_surprise_pct":   ana.get("eps_surprise_pct"),
+                },
+            }
+            results.append(item)
 
-    n = len(signals)
-    height = max(500, n * 100 + 200)
-    components.html(html, height=height, scrolling=True)
+        if progress_callback:
+            progress_callback(tickers.index(ticker) + 1, total, ticker, results[-1])
+
+    return results
