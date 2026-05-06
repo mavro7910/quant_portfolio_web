@@ -173,91 +173,132 @@ def fetch_quant_context(tickers: list[str]) -> dict[str, dict]:
 
 def fetch_analyst_data(tickers: list[str]) -> dict[str, dict]:
     """
-    종목별 애널리스트 데이터 수집 (yfinance).
-    반환: {ticker: {
-        rec_key, rec_mean, n_analysts,
-        target_mean, target_high, target_low, target_upside_pct,
-        earnings_date, earnings_days_left,
-        eps_surprise_pct, (직전 분기)
-        current_price,
-    }}
+    종목별 애널리스트 데이터 수집.
+    info + analyst_price_targets + earnings_dates + calendar 다중 소스 활용.
     """
     import yfinance as yf
-    from datetime import datetime, timezone
+    import pandas as pd
 
     result = {}
     for t in tickers:
         try:
             tk   = yf.Ticker(t)
-            info = tk.info or {}
+            data = {}
 
-            # ── 투자의견 ──────────────────────────────
-            rec_key  = info.get("recommendationKey", "")    # buy/hold/sell 등
-            rec_mean = info.get("recommendationMean")        # 1.0~5.0
-            n_ana    = info.get("numberOfAnalystOpinions")
-
-            # ── 목표주가 ──────────────────────────────
-            curr_p      = info.get("currentPrice") or info.get("regularMarketPrice")
-            target_mean = info.get("targetMeanPrice")
-            target_high = info.get("targetHighPrice")
-            target_low  = info.get("targetLowPrice")
-            upside_pct  = None
-            if curr_p and target_mean and curr_p > 0:
-                upside_pct = round((target_mean / curr_p - 1) * 100, 1)
-
-            # ── 어닝 발표일 ───────────────────────────
-            earnings_date     = None
-            earnings_days_left = None
+            # ── ① info (투자의견 + 목표주가) ──────────────────────
             try:
-                cal = tk.calendar
-                if cal is not None and not cal.empty:
-                    # calendar는 dict 또는 DataFrame
-                    if isinstance(cal, dict):
-                        ed = cal.get("Earnings Date")
-                        if ed:
-                            ed = ed[0] if isinstance(ed, list) else ed
-                    else:
-                        ed = cal.get("Earnings Date", [None])
-                        ed = ed.iloc[0] if hasattr(ed, "iloc") else (ed[0] if ed else None)
-
-                    if ed is not None:
-                        if hasattr(ed, "date"):
-                            ed_date = ed.date()
-                        else:
-                            ed_date = pd.Timestamp(ed).date()
-                        today_date = date.today()
-                        days_left  = (ed_date - today_date).days
-                        if -7 <= days_left <= 60:   # 최근 발표~60일 이내만 표시
-                            earnings_date      = ed_date.isoformat()
-                            earnings_days_left = days_left
+                info = tk.info or {}
+                data["rec_key"]   = (info.get("recommendationKey") or "").upper() or None
+                data["rec_mean"]  = info.get("recommendationMean")
+                data["n_analysts"] = info.get("numberOfAnalystOpinions")
+                data["current_price"] = (
+                    info.get("currentPrice")
+                    or info.get("regularMarketPrice")
+                    or info.get("previousClose")
+                )
+                data["target_mean"] = info.get("targetMeanPrice")
+                data["target_high"] = info.get("targetHighPrice")
+                data["target_low"]  = info.get("targetLowPrice")
             except Exception:
                 pass
 
-            # ── 직전 분기 EPS 서프라이즈 ─────────────
-            eps_surprise_pct = None
+            # ── ② analyst_price_targets (yfinance 1.0+) ──────────
+            # info에 목표주가가 없으면 이쪽에서 보완
+            if not data.get("target_mean"):
+                try:
+                    apt = tk.analyst_price_targets
+                    if apt is not None and not apt.empty:
+                        # DataFrame: index=날짜, columns=각 애널리스트
+                        # 또는 Series 형태
+                        if isinstance(apt, pd.DataFrame):
+                            # 컬럼명 확인
+                            cols = [c.lower() for c in apt.columns]
+                            if "mean" in cols:
+                                data["target_mean"] = float(apt.iloc[-1][apt.columns[cols.index("mean")]])
+                            if "high" in cols:
+                                data["target_high"] = float(apt.iloc[-1][apt.columns[cols.index("high")]])
+                            if "low" in cols:
+                                data["target_low"] = float(apt.iloc[-1][apt.columns[cols.index("low")]])
+                        elif isinstance(apt, pd.Series):
+                            data["target_mean"] = float(apt.get("mean", apt.get("targetMeanPrice", None)) or 0) or None
+                except Exception:
+                    pass
+
+            # ── ③ 상승여력 계산 ───────────────────────────────────
+            curr  = data.get("current_price")
+            tmean = data.get("target_mean")
+            if curr and tmean and float(curr) > 0:
+                data["target_upside_pct"] = round((float(tmean) / float(curr) - 1) * 100, 1)
+
+            # ── ④ 어닝 발표일 (calendar) ──────────────────────────
+            try:
+                cal = tk.calendar
+                ed  = None
+                if cal is not None:
+                    if isinstance(cal, dict):
+                        ed = cal.get("Earnings Date")
+                        if isinstance(ed, list) and ed:
+                            ed = ed[0]
+                    elif isinstance(cal, pd.DataFrame) and not cal.empty:
+                        # DataFrame: columns에 날짜, index에 항목명
+                        if "Earnings Date" in cal.index:
+                            ed = cal.loc["Earnings Date"].iloc[0]
+                        elif "Earnings Date" in cal.columns:
+                            ed = cal["Earnings Date"].iloc[0]
+
+                if ed is not None:
+                    ed_ts = pd.Timestamp(ed)
+                    ed_date = ed_ts.date()
+                    from datetime import date as date_cls
+                    today_d = date_cls.today()
+                    days_left = (ed_date - today_d).days
+                    if -30 <= days_left <= 90:
+                        data["earnings_date"]      = ed_date.isoformat()
+                        data["earnings_days_left"] = days_left
+            except Exception:
+                pass
+
+            # ── ⑤ EPS 서프라이즈 (earnings_dates) ────────────────
             try:
                 ed_df = tk.earnings_dates
                 if ed_df is not None and not ed_df.empty:
-                    past = ed_df[ed_df.index < pd.Timestamp.now(tz="UTC")]
-                    past = past.dropna(subset=["Surprise(%)"])
-                    if not past.empty:
-                        eps_surprise_pct = round(float(past["Surprise(%)"].iloc[0]), 1)
+                    # 과거 발표 중 Surprise(%) 있는 것
+                    now_ts = pd.Timestamp.now(tz="UTC")
+                    # tz-naive인 경우 대비
+                    try:
+                        past = ed_df[ed_df.index < now_ts]
+                    except TypeError:
+                        past = ed_df[ed_df.index < pd.Timestamp.now()]
+
+                    # 컬럼명 유연하게 찾기
+                    surp_col = None
+                    for c in past.columns:
+                        if "surprise" in c.lower():
+                            surp_col = c
+                            break
+
+                    if surp_col:
+                        past_clean = past.dropna(subset=[surp_col])
+                        if not past_clean.empty:
+                            data["eps_surprise_pct"] = round(float(past_clean[surp_col].iloc[0]), 1)
             except Exception:
                 pass
 
+            # 정리
             result[t] = {
-                "rec_key":            rec_key.upper() if rec_key else None,
-                "rec_mean":           round(rec_mean, 1) if rec_mean else None,
-                "n_analysts":         int(n_ana) if n_ana else None,
-                "current_price":      round(curr_p, 2) if curr_p else None,
-                "target_mean":        round(target_mean, 2) if target_mean else None,
-                "target_high":        round(target_high, 2) if target_high else None,
-                "target_low":         round(target_low, 2) if target_low else None,
-                "target_upside_pct":  upside_pct,
-                "earnings_date":      earnings_date,
-                "earnings_days_left": earnings_days_left,
-                "eps_surprise_pct":   eps_surprise_pct,
+                "rec_key":            data.get("rec_key"),
+                "rec_mean":           round(data["rec_mean"], 1) if data.get("rec_mean") else None,
+                "n_analysts":         int(data["n_analysts"]) if data.get("n_analysts") else None,
+                "current_price":      round(float(data["current_price"]), 2) if data.get("current_price") else None,
+                "target_mean":        round(float(data["target_mean"]), 2) if data.get("target_mean") else None,
+                "target_high":        round(float(data["target_high"]), 2) if data.get("target_high") else None,
+                "target_low":         round(float(data["target_low"]), 2) if data.get("target_low") else None,
+                "target_upside_pct":  data.get("target_upside_pct"),
+                "earnings_date":      data.get("earnings_date"),
+                "earnings_days_left": data.get("earnings_days_left"),
+                "eps_surprise_pct":   data.get("eps_surprise_pct"),
             }
+
         except Exception:
             result[t] = {}
 
