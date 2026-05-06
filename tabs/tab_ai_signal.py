@@ -287,9 +287,8 @@ def _run_analysis(portfolio: Portfolio, file_key: str, force_full: bool = False)
 # ─────────────────────────────────────────────
 
 def _render_signal_html(signals: list[dict]):
-    """분석 결과를 토스증권 스타일 HTML 컴포넌트로 렌더링."""
+    """탭 전환 + 스와이프 카드 UI로 렌더링."""
 
-    # Python 데이터 → JS에서 쓸 JSON
     signals_json = json.dumps(signals, ensure_ascii=False)
 
     html = f"""
@@ -314,20 +313,21 @@ def _render_signal_html(signals: list[dict]):
     --accent: #7c83f5;
     --accent-soft: rgba(124,131,245,0.12);
     --tag-bg: #1e2440;
+    --green: #4ade80;
+    --yellow: #fbbf24;
   }}
   body {{
     font-family: 'Pretendard', -apple-system, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    padding: 0 0 24px;
+    background: var(--bg); color: var(--text);
+    padding: 0 0 32px;
   }}
 
-  /* 필터 탭 */
+  /* ── 필터 탭 ── */
   .filter-tabs {{
-    display: flex; gap: 6px; padding: 10px 16px 0;
+    display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap;
   }}
   .filter-tab {{
-    padding: 7px 14px; border-radius: 20px; font-size: 13px;
+    padding: 6px 14px; border-radius: 20px; font-size: 12px;
     font-weight: 500; cursor: pointer; border: 1px solid var(--border);
     color: var(--text-sub); background: transparent;
     font-family: inherit; transition: all 0.2s;
@@ -336,116 +336,175 @@ def _render_signal_html(signals: list[dict]):
     background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
   }}
 
-  /* 시그널 리스트 */
+  /* ── 카드 리스트 ── */
   .signal-list {{
-    padding: 12px 16px; display: flex; flex-direction: column; gap: 10px;
+    padding: 10px 16px; display: flex; flex-direction: column; gap: 8px;
   }}
 
-  /* 시그널 카드 */
+  /* ── 카드 (닫힌 상태) ── */
   .signal-card {{
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: 14px; padding: 14px 16px; cursor: pointer;
-    transition: all 0.2s; display: flex; align-items: center;
-    gap: 12px; position: relative; overflow: hidden;
+    border-radius: 14px; padding: 13px 14px;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 11px;
+    position: relative; overflow: hidden;
   }}
   .signal-card::before {{
-    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-    width: 3px; border-radius: 14px 0 0 14px;
+    content:''; position:absolute; left:0; top:0; bottom:0;
+    width:3px; border-radius:14px 0 0 14px;
   }}
-  .signal-card.up::before   {{ background: var(--up); }}
-  .signal-card.down::before {{ background: var(--down); }}
+  .signal-card.up::before    {{ background: var(--up); }}
+  .signal-card.down::before  {{ background: var(--down); }}
   .signal-card.neutral::before {{ background: var(--text-muted); }}
-  .signal-card:hover {{
-    border-color: var(--accent); transform: translateY(-1px);
-    box-shadow: 0 4px 20px rgba(124,131,245,0.1);
-  }}
-  .signal-card.open {{ border-color: var(--accent); }}
+  .signal-card:hover {{ border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124,131,245,0.1); }}
+  .signal-card.open  {{ border-radius: 14px 14px 0 0; border-color: var(--accent); border-bottom-color: transparent; }}
 
+  /* ── 로고 ── */
   .ticker-icon {{
-    width: 40px; height: 40px; border-radius: 11px;
+    width: 38px; height: 38px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 700; flex-shrink: 0; color: white;
+    font-size: 12px; font-weight: 700; flex-shrink: 0; color: white;
   }}
 
-  .card-content {{ flex: 1; min-width: 0; }}
-  .card-top {{
-    display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;
+  /* ── 카드 본문 ── */
+  .card-body {{ flex:1; min-width:0; }}
+  .card-row1 {{
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;
   }}
-  .ticker-name {{ font-size: 15px; font-weight: 600; color: var(--text); }}
-  .ticker-sub {{ font-size: 11px; color: var(--text-muted); font-weight: 400; margin-left: 5px; }}
-  .signal-reason {{
-    font-size: 13px; color: var(--text-sub); margin-bottom: 5px;
-    line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  .ticker-name {{ font-size:15px; font-weight:600; }}
+  .ticker-sub  {{ font-size:11px; color:var(--text-muted); margin-left:5px; font-weight:400; }}
+  .card-meta   {{ display:flex; align-items:center; gap:8px; }}
+  .rec-badge {{
+    font-size:10px; font-weight:700; padding:2px 7px;
+    border-radius:5px; letter-spacing:0.3px;
   }}
-  .change-badge {{ display: inline-flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 700; }}
-  .change-badge.up   {{ color: var(--up); }}
-  .change-badge.down {{ color: var(--down); }}
-  .change-badge.neutral {{ color: var(--text-muted); }}
-  .card-arrow {{ color: var(--text-muted); font-size: 18px; flex-shrink: 0; transition: transform 0.2s; }}
-  .card-arrow.open {{ transform: rotate(90deg); }}
+  .rec-buy     {{ background:rgba(74,222,128,0.15); color:var(--green); border:1px solid rgba(74,222,128,0.3); }}
+  .rec-hold    {{ background:rgba(251,191,36,0.15);  color:var(--yellow);border:1px solid rgba(251,191,36,0.3); }}
+  .rec-sell    {{ background:rgba(255,107,107,0.15); color:var(--up);   border:1px solid rgba(255,107,107,0.3); }}
+  .rec-none    {{ background:var(--tag-bg); color:var(--text-muted); border:1px solid var(--border); }}
 
-  /* 상세 패널 (인라인 확장) */
-  .detail-panel {{
-    display: none; overflow: hidden;
-    background: var(--surface2); border-radius: 0 0 12px 12px;
-    border: 1px solid var(--border); border-top: none;
-    margin-top: -10px; padding: 16px;
+  .card-row2 {{ display:flex; align-items:center; justify-content:space-between; }}
+  .card-reason {{
+    font-size:12px; color:var(--text-sub); flex:1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px;
   }}
-  .detail-panel.open {{ display: block; }}
-
-  .section-title {{
-    font-size: 14px; font-weight: 700; color: var(--text);
-    margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+  .card-right  {{ display:flex; align-items:center; gap:8px; flex-shrink:0; }}
+  .change-badge {{ font-size:13px; font-weight:700; }}
+  .change-badge.up      {{ color:var(--up); }}
+  .change-badge.down    {{ color:var(--down); }}
+  .change-badge.neutral {{ color:var(--text-muted); }}
+  .card-chips  {{ display:flex; gap:4px; margin-top:5px; flex-wrap:wrap; }}
+  .chip {{
+    font-size:10px; padding:2px 7px; border-radius:5px;
+    background:var(--tag-bg); color:var(--text-muted); border:1px solid var(--border);
   }}
-  .ai-badge {{
-    font-size: 10px; color: var(--accent); font-weight: 600;
-    background: var(--accent-soft); padding: 2px 7px; border-radius: 5px;
+  .chip.warn {{ background:rgba(255,107,107,0.1); color:#ff9999; border-color:rgba(255,107,107,0.25); }}
+  .chip.good {{ background:rgba(74,222,128,0.1);  color:#86efac; border-color:rgba(74,222,128,0.25); }}
+
+  .card-arrow {{ color:var(--text-muted); font-size:16px; flex-shrink:0; transition:transform 0.2s; }}
+  .card-arrow.open {{ transform:rotate(90deg); }}
+
+  /* ── 상세 패널 ── */
+  .detail-wrap {{
+    background:var(--surface2); border:1px solid var(--accent);
+    border-top:none; border-radius:0 0 14px 14px;
+    overflow:hidden;
   }}
 
-  /* 불릿 */
-  .bullet-list {{ display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }}
-  .bullet-item {{ display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text-sub); line-height: 1.5; }}
-  .bullet-dot {{ width: 5px; height: 5px; border-radius: 50%; background: var(--accent); margin-top: 7px; flex-shrink: 0; }}
+  /* 탭 헤더 */
+  .dtab-header {{
+    display:flex; border-bottom:1px solid var(--border);
+  }}
+  .dtab-btn {{
+    flex:1; padding:10px 0; font-size:12px; font-weight:600;
+    text-align:center; cursor:pointer; color:var(--text-muted);
+    background:transparent; border:none; font-family:inherit;
+    border-bottom:2px solid transparent; transition:all 0.2s;
+    margin-bottom:-1px;
+  }}
+  .dtab-btn.active {{ color:var(--accent); border-bottom-color:var(--accent); }}
 
-  /* 태그 */
-  .tag-row {{ display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }}
+  /* 탭 콘텐츠 */
+  .dtab-content {{ display:none; padding:14px 16px; }}
+  .dtab-content.active {{ display:block; }}
+
+  /* AI 의견 탭 */
+  .ai-summary {{
+    background:var(--accent-soft); border:1px solid var(--border);
+    border-radius:10px; padding:11px 13px; margin-bottom:12px;
+    font-size:13px; color:var(--text); line-height:1.55; font-weight:500;
+  }}
+  .bullet-list {{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }}
+  .bullet-item {{ display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--text-sub); line-height:1.5; }}
+  .bullet-label {{
+    font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px;
+    flex-shrink:0; margin-top:1px;
+  }}
+  .bullet-label.q {{ background:rgba(124,131,245,0.2); color:#a5b4fc; }}
+  .bullet-label.n {{ background:rgba(74,222,128,0.15); color:#86efac; }}
+  .bullet-label.a {{ background:rgba(251,191,36,0.15);  color:#fde68a; }}
+  .tag-row {{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }}
   .tag {{
-    padding: 4px 9px; background: var(--tag-bg); border: 1px solid var(--border);
-    border-radius: 7px; font-size: 11px; color: var(--text-sub); font-weight: 500;
+    padding:3px 8px; background:var(--tag-bg); border:1px solid var(--border);
+    border-radius:6px; font-size:11px; color:var(--text-sub);
   }}
 
-  /* 연관 기업 */
-  .related-section {{ border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; }}
-  .related-title {{ font-size: 13px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; }}
+  /* 애널리스트 탭 */
+  .ana-grid {{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;
+  }}
+  .ana-card {{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:10px 12px;
+  }}
+  .ana-label {{ font-size:10px; color:var(--text-muted); margin-bottom:3px; }}
+  .ana-value {{ font-size:15px; font-weight:700; color:var(--text); }}
+  .ana-sub   {{ font-size:11px; color:var(--text-muted); margin-top:2px; }}
+  .ana-up    {{ color:var(--green); }}
+  .ana-down  {{ color:var(--up); }}
+  .earning-bar {{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:10px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+  }}
+  .earning-left  {{ font-size:12px; color:var(--text-sub); }}
+  .earning-right {{ font-size:13px; font-weight:700; }}
+  .earning-right.soon {{ color:var(--yellow); }}
+  .earning-right.past {{ color:var(--text-muted); }}
+
+  /* 연관기업 */
+  .related-section {{ border-top:1px solid var(--border); padding-top:10px; margin-top:4px; }}
+  .related-title {{ font-size:12px; font-weight:600; color:var(--text-sub); margin-bottom:7px; }}
   .related-item {{
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 10px; padding: 10px 12px; margin-bottom: 7px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:9px; padding:8px 11px; margin-bottom:6px;
   }}
-  .related-ticker {{ font-size: 13px; font-weight: 600; color: var(--accent); }}
-  .related-reason {{ font-size: 12px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }}
+  .related-ticker {{ font-size:13px; font-weight:600; color:var(--accent); }}
+  .related-reason {{ font-size:11px; color:var(--text-muted); margin-top:2px; line-height:1.4; }}
 
-  /* 뉴스 출처 */
-  .news-section {{ border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; }}
-  .news-title {{ font-size: 13px; font-weight: 600; color: var(--text-sub); margin-bottom: 8px; }}
+  /* 뉴스 탭 */
   .news-item {{
-    font-size: 12px; color: var(--text-muted); padding: 5px 0;
-    border-bottom: 1px solid var(--border); line-height: 1.4;
+    padding:10px 0; border-bottom:1px solid var(--border);
   }}
-  .news-item:last-child {{ border-bottom: none; }}
+  .news-item:last-child {{ border-bottom:none; }}
+  .news-source {{ font-size:10px; color:var(--accent); font-weight:600; margin-bottom:3px; }}
+  .news-title  {{ font-size:12px; color:var(--text-sub); line-height:1.45; margin-bottom:4px; }}
+  .news-snippet {{ font-size:11px; color:var(--text-muted); line-height:1.45; }}
+  .news-senti  {{ display:inline-block; font-size:10px; padding:1px 6px; border-radius:4px; margin-top:4px; }}
+  .news-senti.pos {{ background:rgba(74,222,128,0.15);  color:#86efac; }}
+  .news-senti.neg {{ background:rgba(255,107,107,0.15); color:#ff9999; }}
+  .news-senti.neu {{ background:var(--tag-bg); color:var(--text-muted); }}
 
-  /* 오류/미분석 */
-  .no-signal {{
-    font-size: 13px; color: var(--text-muted); padding: 8px 0; text-align: center;
-  }}
+  /* 오류 */
+  .no-signal {{ font-size:13px; color:var(--text-muted); padding:16px 0; text-align:center; }}
 
   /* 빈 상태 */
-  .empty-state {{ text-align: center; padding: 40px 20px; color: var(--text-muted); }}
-  .empty-state .icon {{ font-size: 36px; margin-bottom: 10px; }}
-  .empty-state p {{ font-size: 14px; line-height: 1.6; }}
+  .empty-state {{ text-align:center; padding:40px 20px; color:var(--text-muted); }}
+  .empty-state .icon {{ font-size:36px; margin-bottom:10px; }}
 
   @keyframes fadeUp {{
-    from {{ opacity: 0; transform: translateY(10px); }}
-    to   {{ opacity: 1; transform: translateY(0); }}
+    from {{ opacity:0; transform:translateY(8px); }}
+    to   {{ opacity:1; transform:translateY(0); }}
   }}
 </style>
 </head>
@@ -463,19 +522,17 @@ def _render_signal_html(signals: list[dict]):
 <script>
 const RAW_DATA = {signals_json};
 
-// 티커별 아이콘 색상
 const COLORS = [
   "#3949ab","#1e88e5","#00acc1","#43a047",
   "#fb8c00","#e53935","#8e24aa","#00897b","#f4511e","#6d4c41",
   "#546e7a","#c0ca33","#26a69a","#ec407a","#7c83f5"
 ];
-function tickerColor(ticker, idx) {{
-  const map = {{
-    AAPL:"#555",MSFT:"#0078d4",NVDA:"#76b900",AMZN:"#ff9900",
-    GOOGL:"#4285f4",META:"#1877f2",TSLA:"#cc0000",
-  }};
-  return map[ticker] || COLORS[idx % COLORS.length];
-}}
+const TICKER_COLORS = {{
+  AAPL:"#555",MSFT:"#0078d4",NVDA:"#76b900",AMZN:"#ff9900",
+  GOOGL:"#4285f4",META:"#1877f2",TSLA:"#cc0000",
+}};
+
+function tickerColor(t, i) {{ return TICKER_COLORS[t] || COLORS[i % COLORS.length]; }}
 
 function tickerIconHtml(ticker, idx, logoUrl) {{
   const color = tickerColor(ticker, idx);
@@ -491,107 +548,146 @@ function tickerIconHtml(ticker, idx, logoUrl) {{
 
 let currentFilter = "all";
 let openTicker    = null;
+let openTab       = {{}};  // ticker → 'ai'|'analyst'|'news'
 
-function setFilter(el, filter) {{
+function setFilter(el, f) {{
   document.querySelectorAll(".filter-tab").forEach(t => t.classList.remove("active"));
   el.classList.add("active");
-  currentFilter = filter;
+  currentFilter = f;
   renderList();
 }}
 
-function toggleDetail(ticker) {{
+function toggleCard(ticker) {{
   openTicker = openTicker === ticker ? null : ticker;
+  if (openTicker && !openTab[ticker]) openTab[ticker] = "ai";
   renderList();
 }}
 
-function getSignalClass(s) {{
-  const sig = s?.signal?.signal || "neutral";
-  if (sig === "up")   return "up";
-  if (sig === "down") return "down";
-  return "neutral";
+function switchTab(ticker, tab, e) {{
+  e.stopPropagation();
+  openTab[ticker] = tab;
+  renderList();
 }}
 
-function getChangePct(item) {{
-  const c = item.change_pct;
-  if (c === null || c === undefined) return null;
-  return parseFloat(c);
+function getSignalClass(item) {{
+  const sig = item?.signal?.signal || "neutral";
+  return sig === "up" ? "up" : sig === "down" ? "down" : "neutral";
+}}
+
+function recBadgeHtml(rec) {{
+  if (!rec) return `<span class="rec-badge rec-none">N/A</span>`;
+  const r = rec.toUpperCase();
+  const cls = r.includes("BUY") ? "rec-buy" : r.includes("SELL") ? "rec-sell" : "rec-hold";
+  const label = r === "STRONG_BUY" ? "강력매수" : r === "BUY" ? "매수" :
+                r === "HOLD" ? "보유" : r === "SELL" ? "매도" :
+                r === "UNDERPERFORM" ? "매도" : rec;
+  return `<span class="rec-badge ${{cls}}">${{label}}</span>`;
+}}
+
+function earningChipHtml(ana) {{
+  if (ana?.earnings_days_left == null) return "";
+  const d = ana.earnings_days_left;
+  if (d < 0)  return `<span class="chip">어닝 D+${{Math.abs(d)}} 발표완료</span>`;
+  if (d <= 7) return `<span class="chip warn">🔔 어닝 D-${{d}}</span>`;
+  if (d <= 30) return `<span class="chip">어닝 D-${{d}}</span>`;
+  return "";
+}}
+
+function upsideChipHtml(ana) {{
+  if (ana?.target_upside_pct == null) return "";
+  const u = ana.target_upside_pct;
+  const cls = u > 15 ? "good" : u < -5 ? "warn" : "";
+  return `<span class="chip ${{cls}}">목표가 ${{u > 0 ? "+" : ""}}${{u.toFixed(1)}}%</span>`;
 }}
 
 function renderList() {{
   const list = document.getElementById("signalList");
-  let data   = RAW_DATA;
-
+  let data = RAW_DATA;
   if (currentFilter === "up")      data = data.filter(d => getSignalClass(d) === "up");
   if (currentFilter === "down")    data = data.filter(d => getSignalClass(d) === "down");
   if (currentFilter === "neutral") data = data.filter(d => getSignalClass(d) === "neutral");
 
-  if (data.length === 0) {{
+  if (!data.length) {{
     list.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>해당하는 시그널이 없어요</p></div>`;
     return;
   }}
 
   list.innerHTML = data.map((item, i) => {{
-    const ticker     = item.ticker;
-    const sigClass   = getSignalClass(item);
-    const change     = getChangePct(item);
-    const changeStr  = change !== null ? (change >= 0 ? "+" : "") + change.toFixed(2) + "%" : "N/A";
-    const arrow      = sigClass === "up" ? "▲" : sigClass === "down" ? "▼" : "—";
-    const reason     = item.signal?.reason || "분석 정보 없음";
-    const color      = tickerColor(ticker, i);
-    const logoUrl    = item.logo_url || null;
-    const isOpen     = openTicker === ticker;
+    const ticker   = item.ticker;
+    const sigClass = getSignalClass(item);
+    const change   = item.change_pct != null ? parseFloat(item.change_pct) : null;
+    const changeStr = change != null ? (change >= 0 ? "+" : "") + change.toFixed(2) + "%" : "N/A";
+    const arrow    = sigClass === "up" ? "▲" : sigClass === "down" ? "▼" : "—";
+    const reason   = item.signal?.reason || "분석 정보 없음";
+    const logoUrl  = item.logo_url || null;
+    const ana      = item.analyst || {{}};
+    const isOpen   = openTicker === ticker;
 
-    const detail     = isOpen ? renderDetail(item, color) : "";
+    const detail = isOpen ? renderDetail(item, i) : "";
 
     return `
-      <div style="animation: fadeUp 0.25s ease ${{i * 0.05}}s both">
-        <div class="signal-card ${{sigClass}} ${{isOpen ? "open" : ""}}"
-             onclick="toggleDetail('${{ticker}}')"
-             style="border-radius: ${{isOpen ? "14px 14px 0 0" : "14px"}}">
+      <div style="animation:fadeUp 0.22s ease ${{i*0.04}}s both">
+        <div class="signal-card ${{sigClass}}${{isOpen ? " open" : ""}}"
+             onclick="toggleCard('${{ticker}}')">
           ${{tickerIconHtml(ticker, i, logoUrl)}}
-          <div class="card-content">
-            <div class="card-top">
+          <div class="card-body">
+            <div class="card-row1">
               <span class="ticker-name">${{ticker}}<span class="ticker-sub">${{item.shares?.toFixed(2)}}주</span></span>
+              <div class="card-meta">
+                ${{recBadgeHtml(ana.rec_key)}}
+              </div>
             </div>
-            <div class="signal-reason">${{reason}}</div>
-            <span class="change-badge ${{sigClass}}">${{arrow}} ${{changeStr}}</span>
+            <div class="card-row2">
+              <span class="card-reason">${{reason}}</span>
+              <span class="change-badge ${{sigClass}}">${{arrow}} ${{changeStr}}</span>
+            </div>
+            <div class="card-chips">
+              ${{earningChipHtml(ana)}}
+              ${{upsideChipHtml(ana)}}
+            </div>
           </div>
-          <div class="card-arrow ${{isOpen ? "open" : ""}}">›</div>
+          <div class="card-arrow${{isOpen ? " open" : ""}}">›</div>
         </div>
         ${{detail}}
-      </div>
-    `;
+      </div>`;
   }}).join("");
 }}
 
-function renderDetail(item, color) {{
-  if (!item.signal) {{
-    return `
-      <div class="detail-panel open">
-        <div class="no-signal">⚠️ AI 분석에 실패했습니다. 잠시 후 재시도해주세요.</div>
-      </div>`;
-  }}
-  if (item.signal._error) {{
-    return `
-      <div class="detail-panel open">
-        <div class="no-signal">⚠️ 오류: ${{item.signal._error}}</div>
-      </div>`;
+function renderDetail(item, idx) {{
+  if (!item.signal || item.signal._error) {{
+    const msg = item.signal?._error || "AI 분석 실패";
+    return `<div class="detail-wrap"><div class="no-signal">⚠️ ${{msg}}</div></div>`;
   }}
 
-  const sig      = item.signal;
-  const bullets  = sig.bullets  || [];
-  const tags     = sig.tags     || [];
-  const related  = sig.related  || [];
-  const headlines = item.headlines || [];
+  const ticker  = item.ticker;
+  const tab     = openTab[ticker] || "ai";
+  const sig     = item.signal;
+  const ana     = item.analyst || {{}};
+  const articles = item.articles || [];
 
-  const bulletsHtml = bullets.map(b => `
+  // ── 탭 헤더 ──────────────────────────────────────────
+  const tabs = [
+    {{ id:"ai",      label:"💡 AI 의견" }},
+    {{ id:"analyst", label:"📊 애널리스트" }},
+    {{ id:"news",    label:"📰 뉴스" }},
+  ];
+  const headerHtml = `<div class="dtab-header">
+    ${{tabs.map(t => `<button class="dtab-btn${{tab===t.id?" active":""}}"
+      onclick="switchTab('${{ticker}}','${{t.id}}',event)">${{t.label}}</button>`).join("")}}
+  </div>`;
+
+  // ── AI 탭 ─────────────────────────────────────────────
+  const bullets = sig.bullets || [];
+  const labels  = ["퀀트","뉴스","액션"];
+  const lclass  = ["q","n","a"];
+  const bulletsHtml = bullets.map((b, i) => `
     <div class="bullet-item">
-      <div class="bullet-dot"></div>
+      <span class="bullet-label ${{lclass[i] || 'q'}}">${{labels[i] || ""}}</span>
       <span>${{b}}</span>
     </div>`).join("");
-
+  const tags    = sig.tags || [];
   const tagsHtml = tags.map(t => `<div class="tag">${{t}}</div>`).join("");
-
+  const related = sig.related || [];
   const relatedHtml = related.length > 0
     ? `<div class="related-section">
          <div class="related-title">🔗 연관 기업</div>
@@ -600,24 +696,103 @@ function renderDetail(item, color) {{
              <div class="related-ticker">${{r.ticker}}</div>
              <div class="related-reason">${{r.reason}}</div>
            </div>`).join("")}}
-       </div>`
-    : "";
-
-  const newsHtml = headlines.length > 0
-    ? `<div class="news-section">
-         <div class="news-title">📰 뉴스 출처</div>
-         ${{headlines.slice(0,5).map(h => `<div class="news-item">${{h}}</div>`).join("")}}
-       </div>`
-    : "";
-
-  return `
-    <div class="detail-panel open">
-      <div class="section-title">왜 움직였을까? <span class="ai-badge">AI 요약</span></div>
+       </div>` : "";
+  const aiContent = `
+    <div class="dtab-content${{tab==="ai"?" active":""}}">
+      <div class="ai-summary">${{reason_full(sig)}}</div>
       <div class="bullet-list">${{bulletsHtml}}</div>
       <div class="tag-row">${{tagsHtml}}</div>
       ${{relatedHtml}}
-      ${{newsHtml}}
     </div>`;
+
+  // ── 애널리스트 탭 ──────────────────────────────────────
+  const recLabel = ana.rec_key
+    ? ({{ "STRONG_BUY":"강력 매수","BUY":"매수","HOLD":"보유",
+          "SELL":"매도","UNDERPERFORM":"매도" }}[ana.rec_key] || ana.rec_key)
+    : "—";
+  const nAna = ana.n_analysts ? `${{ana.n_analysts}}명` : "";
+  const recColor = ana.rec_key?.includes("BUY") ? "ana-up" :
+                   ana.rec_key?.includes("SELL") ? "ana-down" : "";
+  const upside = ana.target_upside_pct;
+  const upClass = upside != null ? (upside > 0 ? "ana-up" : "ana-down") : "";
+  const upStr   = upside != null ? `${{upside > 0 ? "+" : ""}}${{upside.toFixed(1)}}%` : "—";
+
+  const epsSurp = ana.eps_surprise_pct;
+  const epsCls  = epsSurp != null ? (epsSurp > 0 ? "ana-up" : "ana-down") : "";
+  const epsStr  = epsSurp != null ? `${{epsSurp > 0 ? "+" : ""}}${{epsSurp.toFixed(1)}}%` : "—";
+
+  let earningHtml = "";
+  if (ana.earnings_date) {{
+    const d = ana.earnings_days_left;
+    const label = d < 0 ? `D+${{Math.abs(d)}} 발표완료` : `D-${{d}} 발표예정`;
+    const cls   = d != null && d <= 14 && d >= 0 ? "soon" : "past";
+    earningHtml = `
+      <div class="earning-bar">
+        <span class="earning-left">📅 실적 발표</span>
+        <span class="earning-right ${{cls}}">${{ana.earnings_date}} · ${{label}}</span>
+      </div>`;
+  }}
+
+  const analystContent = `
+    <div class="dtab-content${{tab==="analyst"?" active":""}}">
+      <div class="ana-grid">
+        <div class="ana-card">
+          <div class="ana-label">투자의견</div>
+          <div class="ana-value ${{recColor}}">${{recLabel}}</div>
+          <div class="ana-sub">${{nAna}} 애널리스트</div>
+        </div>
+        <div class="ana-card">
+          <div class="ana-label">목표주가 상승여력</div>
+          <div class="ana-value ${{upClass}}">${{upStr}}</div>
+          <div class="ana-sub">${{ana.target_mean ? "$" + ana.target_mean : "—"}}</div>
+        </div>
+        <div class="ana-card">
+          <div class="ana-label">직전 EPS 서프라이즈</div>
+          <div class="ana-value ${{epsCls}}">${{epsStr}}</div>
+          <div class="ana-sub">전분기 대비</div>
+        </div>
+        <div class="ana-card">
+          <div class="ana-label">목표가 범위</div>
+          <div class="ana-value" style="font-size:12px">
+            ${{ana.target_low ? "$"+ana.target_low : "—"}} ~ ${{ana.target_high ? "$"+ana.target_high : "—"}}
+          </div>
+          <div class="ana-sub">Low ~ High</div>
+        </div>
+      </div>
+      ${{earningHtml}}
+    </div>`;
+
+  // ── 뉴스 탭 ────────────────────────────────────────────
+  const newsItems = articles.length > 0
+    ? articles.slice(0, 5).map(a => {{
+        const senti = a.sentiment;
+        const scls  = senti != null ? (senti > 0.2 ? "pos" : senti < -0.2 ? "neg" : "neu") : "";
+        const slabel = senti != null ? (senti > 0.2 ? "긍정" : senti < -0.2 ? "부정" : "중립") : "";
+        return `<div class="news-item">
+          ${{a.source ? `<div class="news-source">${{a.source}}</div>` : ""}}
+          <div class="news-title">${{a.title || ""}}</div>
+          ${{a.snippet ? `<div class="news-snippet">${{a.snippet.slice(0,150)}}</div>` : ""}}
+          ${{scls ? `<span class="news-senti ${{scls}}">${{slabel}}</span>` : ""}}
+        </div>`;
+      }}).join("")
+    : `<div class="no-signal">최근 뉴스 없음</div>`;
+
+  const newsContent = `<div class="dtab-content${{tab==="news"?" active":""}}">
+    ${{newsItems}}
+  </div>`;
+
+  return `<div class="detail-wrap">
+    ${{headerHtml}}
+    ${{aiContent}}
+    ${{analystContent}}
+    ${{newsContent}}
+  </div>`;
+}}
+
+function reason_full(sig) {{
+  // reason이 짧으면 bullets[2](액션시사점)도 붙여서 표시
+  const r = sig.reason || "";
+  return r;
 }}
 
 renderList();
@@ -626,7 +801,6 @@ renderList();
 </html>
 """
 
-    # 종목 수에 따라 높이 동적 조정
     n = len(signals)
-    height = max(400, n * 90 + 200)
+    height = max(500, n * 100 + 200)
     components.html(html, height=height, scrolling=True)

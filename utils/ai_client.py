@@ -168,6 +168,103 @@ def fetch_quant_context(tickers: list[str]) -> dict[str, dict]:
 
 
 # ─────────────────────────────────────────────
+# 애널리스트 데이터 수집
+# ─────────────────────────────────────────────
+
+def fetch_analyst_data(tickers: list[str]) -> dict[str, dict]:
+    """
+    종목별 애널리스트 데이터 수집 (yfinance).
+    반환: {ticker: {
+        rec_key, rec_mean, n_analysts,
+        target_mean, target_high, target_low, target_upside_pct,
+        earnings_date, earnings_days_left,
+        eps_surprise_pct, (직전 분기)
+        current_price,
+    }}
+    """
+    import yfinance as yf
+    from datetime import datetime, timezone
+
+    result = {}
+    for t in tickers:
+        try:
+            tk   = yf.Ticker(t)
+            info = tk.info or {}
+
+            # ── 투자의견 ──────────────────────────────
+            rec_key  = info.get("recommendationKey", "")    # buy/hold/sell 등
+            rec_mean = info.get("recommendationMean")        # 1.0~5.0
+            n_ana    = info.get("numberOfAnalystOpinions")
+
+            # ── 목표주가 ──────────────────────────────
+            curr_p      = info.get("currentPrice") or info.get("regularMarketPrice")
+            target_mean = info.get("targetMeanPrice")
+            target_high = info.get("targetHighPrice")
+            target_low  = info.get("targetLowPrice")
+            upside_pct  = None
+            if curr_p and target_mean and curr_p > 0:
+                upside_pct = round((target_mean / curr_p - 1) * 100, 1)
+
+            # ── 어닝 발표일 ───────────────────────────
+            earnings_date     = None
+            earnings_days_left = None
+            try:
+                cal = tk.calendar
+                if cal is not None and not cal.empty:
+                    # calendar는 dict 또는 DataFrame
+                    if isinstance(cal, dict):
+                        ed = cal.get("Earnings Date")
+                        if ed:
+                            ed = ed[0] if isinstance(ed, list) else ed
+                    else:
+                        ed = cal.get("Earnings Date", [None])
+                        ed = ed.iloc[0] if hasattr(ed, "iloc") else (ed[0] if ed else None)
+
+                    if ed is not None:
+                        if hasattr(ed, "date"):
+                            ed_date = ed.date()
+                        else:
+                            ed_date = pd.Timestamp(ed).date()
+                        today_date = date.today()
+                        days_left  = (ed_date - today_date).days
+                        if -7 <= days_left <= 60:   # 최근 발표~60일 이내만 표시
+                            earnings_date      = ed_date.isoformat()
+                            earnings_days_left = days_left
+            except Exception:
+                pass
+
+            # ── 직전 분기 EPS 서프라이즈 ─────────────
+            eps_surprise_pct = None
+            try:
+                ed_df = tk.earnings_dates
+                if ed_df is not None and not ed_df.empty:
+                    past = ed_df[ed_df.index < pd.Timestamp.now(tz="UTC")]
+                    past = past.dropna(subset=["Surprise(%)"])
+                    if not past.empty:
+                        eps_surprise_pct = round(float(past["Surprise(%)"].iloc[0]), 1)
+            except Exception:
+                pass
+
+            result[t] = {
+                "rec_key":            rec_key.upper() if rec_key else None,
+                "rec_mean":           round(rec_mean, 1) if rec_mean else None,
+                "n_analysts":         int(n_ana) if n_ana else None,
+                "current_price":      round(curr_p, 2) if curr_p else None,
+                "target_mean":        round(target_mean, 2) if target_mean else None,
+                "target_high":        round(target_high, 2) if target_high else None,
+                "target_low":         round(target_low, 2) if target_low else None,
+                "target_upside_pct":  upside_pct,
+                "earnings_date":      earnings_date,
+                "earnings_days_left": earnings_days_left,
+                "eps_surprise_pct":   eps_surprise_pct,
+            }
+        except Exception:
+            result[t] = {}
+
+    return result
+
+
+# ─────────────────────────────────────────────
 # 뉴스 수집
 # ─────────────────────────────────────────────
 
@@ -382,8 +479,13 @@ def _format_news_block(articles: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _build_batch_prompt(holdings: dict, data_map: dict, quant_ctx: dict) -> str:
-    # 시장 국면 (첫 번째 종목에서 추출)
+def _build_batch_prompt(
+    holdings: dict,
+    data_map: dict,
+    quant_ctx: dict,
+    analyst_ctx: dict,
+) -> str:
+    # 시장 국면
     is_bull = None
     for t in holdings:
         ctx = quant_ctx.get(t, {})
@@ -401,10 +503,12 @@ def _build_batch_prompt(holdings: dict, data_map: dict, quant_ctx: dict) -> str:
     for ticker, shares in holdings.items():
         articles, change_pct = data_map.get(ticker, ([], None))
         ctx = quant_ctx.get(ticker, {})
+        ana = analyst_ctx.get(ticker, {})
         n   = ctx.get("n_tickers", len(holdings))
 
         change_str = f"{change_pct:+.2f}%" if change_pct is not None else "N/A"
 
+        # 퀀트 블록
         quant_parts = []
         if ctx.get("mom_rank"):
             quant_parts.append(f"모멘텀 {ctx['mom_rank']}위/{n}종목")
@@ -416,13 +520,31 @@ def _build_batch_prompt(holdings: dict, data_map: dict, quant_ctx: dict) -> str:
             quant_parts.append(f"52주고점대비 {ctx['week52_high_pct']}%")
         if ctx.get("week52_low_pct") is not None:
             quant_parts.append(f"52주저점대비 +{ctx['week52_low_pct']}%")
-
         quant_str = " | ".join(quant_parts) if quant_parts else "N/A"
-        news_str  = _format_news_block(articles)
+
+        # 애널리스트 블록
+        ana_parts = []
+        if ana.get("rec_key"):
+            n_str = f" ({ana['n_analysts']}명)" if ana.get("n_analysts") else ""
+            ana_parts.append(f"투자의견:{ana['rec_key']}{n_str}")
+        if ana.get("target_mean") and ana.get("current_price"):
+            up = ana.get("target_upside_pct")
+            up_str = f" ({up:+.1f}%)" if up is not None else ""
+            ana_parts.append(f"목표주가:${ana['target_mean']}{up_str}")
+        if ana.get("earnings_days_left") is not None:
+            d = ana["earnings_days_left"]
+            label = f"D+{abs(d)} 발표완료" if d < 0 else f"D-{d} 발표예정"
+            ana_parts.append(f"어닝:{label}")
+        if ana.get("eps_surprise_pct") is not None:
+            ana_parts.append(f"직전EPS서프라이즈:{ana['eps_surprise_pct']:+.1f}%")
+        ana_str = " | ".join(ana_parts) if ana_parts else "N/A"
+
+        news_str = _format_news_block(articles)
 
         items.append(
             f"[{ticker}] {shares:.1f}주 | 전일대비: {change_str}\n"
             f"  퀀트: {quant_str}\n"
+            f"  애널리스트: {ana_str}\n"
             f"  뉴스:\n{news_str}"
         )
 
@@ -434,16 +556,16 @@ def _build_batch_prompt(holdings: dict, data_map: dict, quant_ctx: dict) -> str:
         + f"""
 
 JSON 배열로만 응답 (코드블록 없이):
-[{{"ticker":"종목","signal":"up/down/neutral","reason":"전략적핵심판단25자이내","bullets":["퀀트해석","뉴스연결","액션시사점"],"tags":["태그1","태그2"],"related":[{{"ticker":"관련종목","reason":"연관이유"}}]}}]
+[{{"ticker":"종목","signal":"up/down/neutral","reason":"전략적핵심판단25자이내","bullets":["퀀트해석","뉴스연결","액션시사점"],"tags":["태그1","태그2"],"related":[{{"ticker":"관련기업","reason":"연관이유"}}]}}]
 
 rules:
 - 한국어
-- signal은 퀀트+뉴스 종합 판단 (단순 등락률 아님)
+- signal은 퀀트+애널리스트+뉴스 종합 판단
 - bullets 정확히 3개:
-  ①퀀트해석: 지표 수치를 그대로 반복하지 말고, 모멘텀/변동성/비중/52주위치의 조합이 말하는 전략적 의미를 해석
-  ②뉴스연결: 뉴스가 퀀트 상태를 강화하는지 약화하는지, 그 이유
-  ③액션시사점: 비중확대/유지/축소 중 하나와 구체적 근거 (예: "고점 근접 + 실적 불확실성으로 일부 차익실현 고려")
-- related: 해당 종목과 연관된 기업 1~2개 — 포트폴리오 내외 무관하게 공급사/경쟁사/파트너 등 실제 연관 기업 포함(없으면[])
+  ①퀀트해석: 지표 수치 반복 금지, 조합이 말하는 전략적 의미 해석
+  ②뉴스연결: 뉴스+애널리스트 데이터가 퀀트 상태를 강화/약화하는지
+  ③액션시사점: 비중확대/유지/축소 중 하나와 구체적 근거
+- related: 연관 기업 1~2개, 포트폴리오 내외 무관(없으면[])
 - 반드시 {len(holdings)}개 전부 포함: {', '.join(tickers_list)}"""
     )
 
@@ -456,6 +578,7 @@ def _gemini_batch(
     holdings: dict,
     data_map: dict,
     quant_ctx: dict,
+    analyst_ctx: dict,
     api_key: str,
 ) -> dict[str, dict]:
     import google.generativeai as genai
@@ -464,7 +587,9 @@ def _gemini_batch(
         model_name="gemini-2.5-flash-lite",
         system_instruction=_SYSTEM_PROMPT,
     )
-    response = model.generate_content(_build_batch_prompt(holdings, data_map, quant_ctx))
+    response = model.generate_content(
+        _build_batch_prompt(holdings, data_map, quant_ctx, analyst_ctx)
+    )
     raw = response.text.strip()
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
 
@@ -499,6 +624,7 @@ def _gemini_single(
     articles: list[dict],
     change_pct: float | None,
     quant_ctx: dict,
+    analyst_ctx: dict,
     api_key: str,
 ) -> dict:
     import google.generativeai as genai
@@ -510,6 +636,7 @@ def _gemini_single(
     change_str = f"{change_pct:+.2f}%" if change_pct is not None else "N/A"
     news_str   = _format_news_block(articles)
     ctx        = quant_ctx.get(ticker, {})
+    ana        = analyst_ctx.get(ticker, {})
     n          = ctx.get("n_tickers", 1)
 
     quant_parts = []
@@ -524,9 +651,23 @@ def _gemini_single(
     quant_str  = " | ".join(quant_parts) if quant_parts else "N/A"
     market_str = "강세장" if ctx.get("is_bull") else "약세장"
 
+    # 애널리스트 블록
+    ana_parts = []
+    if ana.get("rec_key"):
+        ana_parts.append(f"투자의견:{ana['rec_key']}")
+    if ana.get("target_upside_pct") is not None:
+        ana_parts.append(f"목표주가상승여력:{ana['target_upside_pct']:+.1f}%")
+    if ana.get("earnings_days_left") is not None:
+        d = ana["earnings_days_left"]
+        ana_parts.append(f"어닝{'D+'+str(abs(d)) if d < 0 else 'D-'+str(d)}")
+    if ana.get("eps_surprise_pct") is not None:
+        ana_parts.append(f"직전EPS서프라이즈:{ana['eps_surprise_pct']:+.1f}%")
+    ana_str = " | ".join(ana_parts) if ana_parts else "N/A"
+
     prompt = (
         f"종목:{ticker} ({shares:.1f}주) | 시장:{market_str} | 전일대비:{change_str}\n"
         f"퀀트: {quant_str}\n"
+        f"애널리스트: {ana_str}\n"
         f"뉴스:\n{news_str}\n\n"
         f"수치를 반복하지 말고 지표 조합의 전략적 의미를 해석하세요.\n"
         f'JSON:{{"signal":"up/down/neutral","reason":"25자이내","bullets":["퀀트지표조합해석","뉴스가퀀트를강화/약화","비중확대/유지/축소+근거"],"tags":["태그1"],"related":[]}}'
@@ -613,11 +754,15 @@ def analyze_portfolio_signals(
             except Exception:
                 data_map[t] = ([], None)
 
-    # ── 2단계: 퀀트 컨텍스트 계산 ──────────────────────────────
+    # ── 2단계: 퀀트 컨텍스트 + 애널리스트 데이터 병렬 계산 ────────
     if progress_callback:
         progress_callback(0, total, "퀀트 지표 계산 중", None)
 
-    quant_ctx = fetch_quant_context(tickers)
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_quant    = ex.submit(fetch_quant_context, tickers)
+        f_analyst  = ex.submit(fetch_analyst_data,  tickers)
+        quant_ctx  = f_quant.result()
+        analyst_ctx = f_analyst.result()
 
     # ── 3단계: 스마트 캐시 분리 ────────────────────────────────
     cached_map: dict[str, dict] = {}
@@ -649,9 +794,10 @@ def analyze_portfolio_signals(
         re_holdings = {t: holdings[t] for t in reanalyze_tickers}
         re_data     = {t: data_map[t]  for t in reanalyze_tickers}
         re_quant    = {t: quant_ctx.get(t, {}) for t in reanalyze_tickers}
+        re_analyst  = {t: analyst_ctx.get(t, {}) for t in reanalyze_tickers}
 
         try:
-            batch_result = _gemini_batch(re_holdings, re_data, re_quant, api_key)
+            batch_result = _gemini_batch(re_holdings, re_data, re_quant, re_analyst, api_key)
             signal_map.update(batch_result)
         except Exception:
             if progress_callback:
@@ -660,7 +806,8 @@ def analyze_portfolio_signals(
                 articles, change_pct = re_data.get(t, ([], None))
                 try:
                     signal_map[t] = _gemini_single(
-                        t, holdings[t], articles, change_pct, re_quant, api_key
+                        t, holdings[t], articles, change_pct,
+                        re_quant, re_analyst, api_key
                     )
                 except Exception as e2:
                     signal_map[t] = {"_error": str(e2)}
@@ -680,6 +827,7 @@ def analyze_portfolio_signals(
             results.append(old)
         else:
             ctx  = quant_ctx.get(ticker, {})
+            ana  = analyst_ctx.get(ticker, {})
             item = {
                 "ticker":        ticker,
                 "shares":        holdings[ticker],
@@ -698,6 +846,19 @@ def analyze_portfolio_signals(
                     "weight_pct":      ctx.get("weight_pct"),
                     "week52_high_pct": ctx.get("week52_high_pct"),
                     "is_bull":         ctx.get("is_bull"),
+                },
+                "analyst": {
+                    "rec_key":            ana.get("rec_key"),
+                    "rec_mean":           ana.get("rec_mean"),
+                    "n_analysts":         ana.get("n_analysts"),
+                    "current_price":      ana.get("current_price"),
+                    "target_mean":        ana.get("target_mean"),
+                    "target_high":        ana.get("target_high"),
+                    "target_low":         ana.get("target_low"),
+                    "target_upside_pct":  ana.get("target_upside_pct"),
+                    "earnings_date":      ana.get("earnings_date"),
+                    "earnings_days_left": ana.get("earnings_days_left"),
+                    "eps_surprise_pct":   ana.get("eps_surprise_pct"),
                 },
             }
             results.append(item)
