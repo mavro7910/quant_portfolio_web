@@ -610,8 +610,8 @@ def _gemini_batch(
         if not ticker:
             continue
         _, change_pct = data_map.get(ticker, ([], None))
-        if change_pct is not None and abs(change_pct) >= 2.0:
-            item["signal"] = "up" if change_pct > 0 else "down"
+        if change_pct is not None:
+            item["signal"] = "up" if change_pct > 0 else ("down" if change_pct < 0 else "neutral")
         item.setdefault("signal", "neutral")
         item.setdefault("reason", "분석 정보 없음")
         item.setdefault("bullets", ["정보 없음"] * 3)
@@ -670,8 +670,8 @@ def _gemini_single(
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
     result = json.loads(raw)
 
-    if change_pct is not None and abs(change_pct) >= 2.0:
-        result["signal"] = "up" if change_pct > 0 else "down"
+    if change_pct is not None:
+        result["signal"] = "up" if change_pct > 0 else ("down" if change_pct < 0 else "neutral")
     result.setdefault("signal", "neutral")
     result.setdefault("reason", "분석 정보 없음")
     result.setdefault("bullets", ["정보 없음"] * 3)

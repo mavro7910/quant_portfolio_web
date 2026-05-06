@@ -570,8 +570,9 @@ function switchTab(ticker, tab, e) {{
 }}
 
 function getSignalClass(item) {{
-  const sig = item?.signal?.signal || "neutral";
-  return sig === "up" ? "up" : sig === "down" ? "down" : "neutral";
+  const c = item?.change_pct;
+  if (c == null) return "neutral";
+  return c > 0 ? "up" : c < 0 ? "down" : "neutral";
 }}
 
 function recBadgeHtml(rec) {{
