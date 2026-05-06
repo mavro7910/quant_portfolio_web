@@ -679,7 +679,7 @@ function renderDetail(item, idx) {{
 
   // ── AI 탭 ─────────────────────────────────────────────
   const bullets = sig.bullets || [];
-  const labels  = ["퀀트","뉴스","액션"];
+  const labels  = ["뉴스","애널리스트","액션"];
   const lclass  = ["q","n","a"];
   const bulletsHtml = bullets.map((b, i) => `
     <div class="bullet-item">
