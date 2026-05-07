@@ -203,20 +203,48 @@ def render(portfolio: Portfolio):
                 key="img_preview_editor",
             )
 
+            # 이미지에 없는 기존 종목 → 0으로 표시 (미리보기용)
+            extracted_tickers = {str(row["티커"]).upper().strip() for _, row in edited.iterrows() if row["티커"]}
+            missing = [t for t in portfolio.holdings if t not in extracted_tickers and portfolio.holdings[t] > 0]
+            if missing:
+                st.markdown(
+                    f'<div class="warn-banner" style="font-size:0.82rem">'
+                    f'⚠️ 이미지에 없는 종목은 수량이 <b>0</b>으로 변경됩니다: '
+                    f'{", ".join(missing)}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
             col_apply, col_cancel = st.columns([3, 1])
             with col_apply:
                 if st.button("✅ 포트폴리오에 반영", key="btn_apply_img", use_container_width=True):
                     updated = []
+                    applied_tickers = set()
+
+                    # 추출된 종목 덮어씌우기
                     for _, row in edited.iterrows():
                         ticker = str(row["티커"]).upper().strip()
                         shares = float(row["추출 수량"])
                         if ticker:
                             portfolio.set_holding(ticker, shares)
+                            applied_tickers.add(ticker)
                             updated.append(f"{ticker} {shares:.6f}주")
+
+                    # 이미지에 없는 기존 종목 → 0
+                    zeroed = []
+                    for t in list(portfolio.holdings.keys()):
+                        if t not in applied_tickers and portfolio.holdings.get(t, 0) > 0:
+                            portfolio.set_holding(t, 0.0)
+                            zeroed.append(t)
+
                     portfolio.save()
                     invalidate_cache("prices_data", "buy_result", "bt_result", "rebal_result", "signal_cache")
                     del st.session_state["img_extracted"]
-                    st.success(f"✅ {len(updated)}개 종목 업데이트!\n" + " · ".join(updated))
+
+                    msg = f"✅ {len(updated)}개 종목 업데이트"
+                    if zeroed:
+                        msg += f" · {len(zeroed)}개 0으로 초기화 ({', '.join(zeroed)})"
+                    st.success(msg)
                     st.rerun()
             with col_cancel:
                 if st.button("❌ 취소", key="btn_cancel_img", use_container_width=True):
