@@ -1,12 +1,88 @@
 """tabs/tab_portfolio.py — 보유 종목 관리 탭"""
 
+import base64
+import json
+import re
+
 import pandas as pd
 import streamlit as st
 
 from core.data import fetch_prices_and_fx
 from core.portfolio import Portfolio
-from utils.ai_client import get_finnhub_key, has_finnhub_key
+from utils.ai_client import get_finnhub_key, has_finnhub_key, get_api_key, has_api_key
 
+
+# ─────────────────────────────────────────────
+# 한글 종목명 → 티커 힌트 (Gemini 보조용)
+# ─────────────────────────────────────────────
+
+_KR_TICKER_HINTS = {
+    "알파벳 a": "GOOGL", "알파벳a": "GOOGL", "알파벳": "GOOGL",
+    "애플": "AAPL",
+    "엔비디아": "NVDA",
+    "마이크로소프트": "MSFT", "마이크로소프 트": "MSFT",
+    "아마존": "AMZN",
+    "메타": "META",
+    "테슬라": "TSLA",
+    "브로드컴": "AVGO",
+    "램 리서치": "LRCX", "램리서치": "LRCX",
+    "어플라이드 머티리얼즈": "AMAT", "어플라이드머티리얼즈": "AMAT",
+    "tsmc": "TSM", "tsmc(adr)": "TSM",
+    "kla": "KLAC",
+    "asml 홀딩(adr)": "ASML", "asml홀딩": "ASML", "asml": "ASML",
+    "arm 홀딩스": "ARM", "arm홀딩스": "ARM",
+    "코스트코": "COST",
+    "마이크론 테크놀로지": "MU", "마이크론테크놀로지": "MU", "마이크론": "MU",
+    "amd": "AMD",
+    "ge 버노바": "GEV", "ge버노바": "GEV",
+}
+
+
+# ─────────────────────────────────────────────
+# Gemini Vision 추출
+# ─────────────────────────────────────────────
+
+def _parse_portfolio_images(uploaded_files: list, api_key: str) -> list[dict]:
+    """Gemini Vision으로 토스증권 캡쳐 이미지(여러 장)에서 종목/수량 추출."""
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+
+    hints_str = "\n".join(f"  {k} -> {v}" for k, v in _KR_TICKER_HINTS.items())
+
+    prompt = f"""이 이미지(들)은 토스증권 해외주식 포트폴리오 화면 캡쳐입니다.
+
+각 종목의 종목명(한글)과 보유 수량(주)만 추출하세요.
+- 수량은 종목명 아래 "0.393708주" 형태로 표시됩니다
+- 총수익, 현재가, 원금, 평가금액 등 나머지 숫자는 무시하세요
+- 여러 장의 이미지에 같은 종목이 있으면 마지막 이미지 기준으로 사용하세요
+
+종목명을 미국 주식 티커로 변환하세요. 참고 매핑:
+{hints_str}
+
+위 목록에 없는 종목도 스스로 판단하여 올바른 티커로 변환하세요.
+예: 팔란티어 -> PLTR, 스노우플레이크 -> SNOW
+
+반드시 JSON 배열만 응답하세요. 코드블록 없이:
+[{{"ticker":"AAPL","shares":0.409813,"name_kr":"애플"}}, ...]"""
+
+    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+
+    parts = []
+    for f in uploaded_files:
+        data = f.read()
+        mime = f.type or "image/jpeg"
+        parts.append({"mime_type": mime, "data": base64.b64encode(data).decode()})
+    parts.append(prompt)
+
+    response = model.generate_content(parts)
+    raw = response.text.strip()
+    raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
+    return json.loads(raw)
+
+
+# ─────────────────────────────────────────────
+# 렌더
+# ─────────────────────────────────────────────
 
 def render(portfolio: Portfolio):
     def invalidate_cache(*keys):
@@ -16,6 +92,7 @@ def render(portfolio: Portfolio):
 
     st.markdown('<div class="section-label">보유 종목 관리</div>', unsafe_allow_html=True)
 
+    # ── 수동 추가/수정 ────────────────────────────────────────────
     col_t, col_s, col_btn1 = st.columns([2.5, 2.5, 1.5])
     with col_t:
         new_ticker = st.text_input("티커 입력", placeholder="AAPL", key="inp_ticker").upper().strip()
@@ -36,6 +113,7 @@ def render(portfolio: Portfolio):
             else:
                 st.error("티커를 입력하세요.")
 
+    # ── 삭제 ─────────────────────────────────────────────────────
     tickers_list = portfolio.tickers()
     col_del_s, col_del_btn = st.columns([4, 1.5])
     with col_del_s:
@@ -49,6 +127,105 @@ def render(portfolio: Portfolio):
                 invalidate_cache("prices_data", "buy_result", "bt_result", "signal_cache")
                 st.success(f"{del_ticker} 삭제 완료!")
                 st.rerun()
+
+    # ── 캡쳐 업로드로 업데이트 ───────────────────────────────────
+    with st.expander("📸 증권사 캡쳐로 포트폴리오 업데이트", expanded=False):
+        if not has_api_key():
+            st.markdown(
+                '<div class="warn-banner">🔑 Gemini API 키가 필요합니다. 설정 탭에서 등록하세요.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                '<div class="info-banner">'
+                '📱 토스증권 포트폴리오 화면을 캡쳐해서 올려주세요.<br>'
+                '<span style="font-size:0.8rem;color:#5c6f99">'
+                '여러 장 동시 업로드 가능 · 이미지에 있는 종목 수량만 덮어씌워집니다</span>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+            uploaded = st.file_uploader(
+                "이미지 업로드 (JPG/PNG)",
+                type=["jpg", "jpeg", "png"],
+                accept_multiple_files=True,
+                key="portfolio_img_uploader",
+            )
+
+            if uploaded:
+                if st.button("🔍 AI로 종목/수량 추출", key="btn_extract_img", use_container_width=True):
+                    with st.spinner("Gemini Vision으로 분석 중..."):
+                        try:
+                            extracted = _parse_portfolio_images(uploaded, get_api_key())
+                            st.session_state["img_extracted"] = extracted
+                        except Exception as e:
+                            st.error(f"추출 실패: {e}")
+
+        # ── 추출 결과 검토 ──────────────────────────────────────
+        if "img_extracted" in st.session_state:
+            extracted = st.session_state["img_extracted"]
+
+            st.markdown(
+                '<div class="section-label" style="margin-top:14px">'
+                '✏️ 추출 결과 확인 · 수정 후 반영하세요'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                '<div class="info-banner" style="font-size:0.8rem">'
+                '티커나 수량이 잘못 인식된 경우 직접 수정할 수 있습니다.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+            df_preview = pd.DataFrame([
+                {
+                    "티커":      item.get("ticker", ""),
+                    "한글명":    item.get("name_kr", ""),
+                    "추출 수량": float(item.get("shares", 0.0)),
+                    "현재 수량": portfolio.holdings.get(item.get("ticker", ""), 0.0),
+                }
+                for item in extracted
+            ])
+
+            edited = st.data_editor(
+                df_preview,
+                column_config={
+                    "티커":      st.column_config.TextColumn("티커", help="잘못된 경우 수정하세요"),
+                    "한글명":    st.column_config.TextColumn("한글명", disabled=True),
+                    "추출 수량": st.column_config.NumberColumn("추출 수량", format="%.6f",
+                                                               help="잘못 인식된 경우 수정하세요"),
+                    "현재 수량": st.column_config.NumberColumn("현재 수량 (기존)", format="%.6f",
+                                                               disabled=True),
+                },
+                hide_index=True,
+                use_container_width=True,
+                key="img_preview_editor",
+            )
+
+            col_apply, col_cancel = st.columns([3, 1])
+            with col_apply:
+                if st.button("✅ 포트폴리오에 반영", key="btn_apply_img", use_container_width=True):
+                    updated = []
+                    for _, row in edited.iterrows():
+                        ticker = str(row["티커"]).upper().strip()
+                        shares = float(row["추출 수량"])
+                        if ticker:
+                            portfolio.set_holding(ticker, shares)
+                            updated.append(f"{ticker} {shares:.6f}주")
+                    portfolio.save()
+                    invalidate_cache("prices_data", "buy_result", "bt_result", "rebal_result", "signal_cache")
+                    del st.session_state["img_extracted"]
+                    st.success(f"✅ {len(updated)}개 종목 업데이트!\n" + " · ".join(updated))
+                    st.rerun()
+            with col_cancel:
+                if st.button("❌ 취소", key="btn_cancel_img", use_container_width=True):
+                    del st.session_state["img_extracted"]
+                    st.rerun()
+
+    # ─────────────────────────────────────────────
+    # 보유 종목 현황
+    # ─────────────────────────────────────────────
 
     holdings = portfolio.holdings
     if not holdings:
@@ -104,7 +281,6 @@ def render(portfolio: Portfolio):
                 for t in portfolio.tickers():
                     name = None
 
-                    # Finnhub 우선 (빠르고 정확) — 이름 + 로고 동시
                     if finnhub_key:
                         try:
                             r = requests.get(
@@ -121,7 +297,6 @@ def render(portfolio: Portfolio):
                         except Exception:
                             pass
 
-                    # yfinance fallback
                     if not name:
                         try:
                             info = yf.Ticker(t).info

@@ -443,6 +443,7 @@ def _render_signal_html(signals: list[dict]):
   .bullet-label.q {{ background:rgba(124,131,245,0.2); color:#a5b4fc; }}
   .bullet-label.n {{ background:rgba(74,222,128,0.15); color:#86efac; }}
   .bullet-label.a {{ background:rgba(251,191,36,0.15);  color:#fde68a; }}
+  .bullet-label.ai {{ background:rgba(77,156,248,0.15); color:#93c5fd; border:1px solid rgba(77,156,248,0.25); }}
   .tag-row {{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }}
   .tag {{
     padding:3px 8px; background:var(--tag-bg); border:1px solid var(--border);
@@ -679,8 +680,8 @@ function renderDetail(item, idx) {{
 
   // ── AI 탭 ─────────────────────────────────────────────
   const bullets = sig.bullets || [];
-  const labels  = ["뉴스","애널리스트","액션"];
-  const lclass  = ["q","n","a"];
+  const labels  = ["뉴스","애널리스트","액션","AI 의견"];
+  const lclass  = ["q","n","a","ai"];
   const bulletsHtml = bullets.map((b, i) => `
     <div class="bullet-item">
       <span class="bullet-label ${{lclass[i] || 'q'}}">${{labels[i] || ""}}</span>

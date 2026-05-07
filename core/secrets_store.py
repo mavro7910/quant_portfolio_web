@@ -126,10 +126,16 @@ def delete_finnhub_key(uid: str) -> tuple[bool, str | None]:
 # 시그널 캐시
 # ─────────────────────────────────────────────
 
+def _kst_today() -> str:
+    """UTC+9 기준 오늘 날짜 반환 (Supabase 저장 키와 일치시키기 위해)"""
+    from datetime import datetime, timedelta
+    return (datetime.utcnow() + timedelta(hours=9)).date().isoformat()
+
+
 def load_signal_cache(uid: str) -> tuple[list | None, str | None]:
     try:
         sb = _get_supabase()
-        today = date.today().isoformat()
+        today = _kst_today()
         res = (
             sb.table("signal_cache")
             .select("data")
@@ -147,7 +153,7 @@ def load_signal_cache(uid: str) -> tuple[list | None, str | None]:
 def save_signal_cache(uid: str, data: list) -> tuple[bool, str | None]:
     try:
         sb = _get_supabase()
-        today = date.today().isoformat()
+        today = _kst_today()
         sb.table("signal_cache").upsert(
             {"uid": uid, "cache_date": today, "data": data},
             on_conflict="uid,cache_date",
