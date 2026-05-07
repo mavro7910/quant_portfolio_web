@@ -49,20 +49,17 @@ def _parse_portfolio_images(uploaded_files: list, api_key: str) -> list[dict]:
 
     hints_str = "\n".join(f"  {k} -> {v}" for k, v in _KR_TICKER_HINTS.items())
 
-    prompt = f"""이 이미지(들)은 토스증권 해외주식 포트폴리오 화면 캡쳐입니다.
+    prompt = f"""이미지에서 "숫자주" 패턴(예: 0.409813주, 1.23456주)을 모두 찾고,
+각 수량 바로 위에 있는 종목명과 쌍으로 추출하세요.
+종목명은 미국 주식 티커로 변환하세요.
+여러 장에 같은 종목이 있으면 마지막 이미지 기준으로 사용하세요.
 
-각 종목의 종목명(한글)과 보유 수량(주)만 추출하세요.
-- 수량은 종목명 아래 "0.393708주" 형태로 표시됩니다
-- 총수익, 현재가, 원금, 평가금액 등 나머지 숫자는 무시하세요
-- 여러 장의 이미지에 같은 종목이 있으면 마지막 이미지 기준으로 사용하세요
-
-종목명을 미국 주식 티커로 변환하세요. 참고 매핑:
+참고 매핑:
 {hints_str}
 
-위 목록에 없는 종목도 스스로 판단하여 올바른 티커로 변환하세요.
-예: 팔란티어 -> PLTR, 스노우플레이크 -> SNOW
+목록에 없는 종목도 스스로 판단하세요. 예: 팔란티어 -> PLTR
 
-반드시 JSON 배열만 응답하세요. 코드블록 없이:
+JSON만 응답, 코드블록 없이:
 [{{"ticker":"AAPL","shares":0.409813,"name_kr":"애플"}}, ...]"""
 
     model = genai.GenerativeModel("gemini-2.5-flash-lite")
@@ -138,9 +135,11 @@ def render(portfolio: Portfolio):
         else:
             st.markdown(
                 '<div class="info-banner">'
-                '📱 토스증권 포트폴리오 화면을 캡쳐해서 올려주세요.<br>'
+                '📱 포트폴리오 화면을 캡쳐해서 올려주세요.<br>'
                 '<span style="font-size:0.8rem;color:#5c6f99">'
-                '여러 장 동시 업로드 가능 · 이미지에 있는 종목 수량만 덮어씌워집니다</span>'
+                '여러 장 동시 업로드 가능 · 이미지에 있는 종목 수량만 덮어씌워집니다<br>'
+                '⚠️ AI 인식 결과는 반드시 확인 후 반영하세요 · 토스증권 앱에서 테스트됨'
+                '</span>'
                 '</div>',
                 unsafe_allow_html=True,
             )
@@ -200,6 +199,7 @@ def render(portfolio: Portfolio):
                 },
                 hide_index=True,
                 use_container_width=True,
+                num_rows="fixed",
                 key="img_preview_editor",
             )
 
