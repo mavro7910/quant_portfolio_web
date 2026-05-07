@@ -618,8 +618,6 @@ def _gemini_batch(
         if not ticker:
             continue
         _, change_pct = data_map.get(ticker, ([], None))
-        if change_pct is not None:
-            item["signal"] = "neutral" if abs(change_pct) < 0.5 else ("up" if change_pct > 0 else "down")
         item.setdefault("signal", "neutral")
         item.setdefault("reason", "분석 정보 없음")
         item.setdefault("bullets", ["정보 없음"] * 4)
@@ -678,8 +676,6 @@ def _gemini_single(
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
     result = json.loads(raw)
 
-    if change_pct is not None:
-        result["signal"] = "neutral" if abs(change_pct) < 0.5 else ("up" if change_pct > 0 else "down")
     result.setdefault("signal", "neutral")
     result.setdefault("reason", "분석 정보 없음")
     result.setdefault("bullets", ["정보 없음"] * 4)
@@ -812,11 +808,6 @@ def analyze_portfolio_signals(
             old = cached_map[ticker].copy()
             old["change_pct"]   = change_pct
             old["reused_cache"] = True
-            # change_pct 기준으로 signal 재계산
-            if change_pct is not None:
-                sig = old.get("signal", {})
-                if isinstance(sig, dict):
-                    sig["signal"] = "neutral" if abs(change_pct) < 0.5 else ("up" if change_pct > 0 else "down")
             results.append(old)
         else:
             ana  = analyst_ctx.get(ticker, {})
