@@ -30,48 +30,101 @@ _KR_TICKER_HINTS = {
 # Gemini Vision 추출
 # ─────────────────────────────────────────────
 
-def _fetch_ticker_names(tickers: list[str]) -> dict[str, str]:
-    """yfinance로 티커 → 영문 회사명 매핑 (캐시 활용)."""
-    cached = st.session_state.get("_ticker_names_cache", {})
-    missing = [t for t in tickers if t not in cached]
-
-    if missing:
-        import yfinance as yf
-        for t in missing:
-            try:
-                info = yf.Ticker(t).info
-                name = info.get("shortName") or info.get("longName") or t
-                cached[t] = name
-            except Exception:
-                cached[t] = t
-        st.session_state["_ticker_names_cache"] = cached
-
-    return {t: cached.get(t, t) for t in tickers}
-
-
-def _parse_portfolio_images(uploaded_files: list, api_key: str, universe: list[str]) -> list[dict]:
-    """Gemini Vision으로 캡쳐 이미지(여러 장)에서 종목/수량 추출."""
+def _extract_names_and_shares(uploaded_files: list, api_key: str) -> list[dict]:
+    """1단계: Vision으로 한글명 + 수량만 추출."""
     import google.generativeai as genai
     genai.configure(api_key=api_key)
 
-    # 포트폴리오 티커 → 영문 회사명 매핑
-    name_map = _fetch_ticker_names(universe)
-    universe_str = "\n".join(f"  {ticker}: {name}" for ticker, name in name_map.items())
-
-    hints_str = "\n".join(f"  {k} -> {v}" for k, v in _KR_TICKER_HINTS.items())
-
-    prompt = f"""이미지에서 "숫자주" 패턴(예: 0.409813주, 1.23456주)을 모두 찾고,
+    prompt = """이미지에서 "숫자주" 패턴(예: 0.409813주, 1.23456주)을 모두 찾고,
 각 수량 바로 위에 있는 종목명과 쌍으로 추출하세요.
 여러 장에 같은 종목이 있으면 마지막 이미지 기준으로 사용하세요.
 
-아래는 포트폴리오 티커와 영문 회사명입니다. 이미지의 종목명을 이 목록의 티커로 매핑하세요:
+JSON만 응답, 코드블록 없이:
+[{"name_kr":"브로드컴","shares":0.284328}, ...]"""
+
+    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    parts = []
+    for f in uploaded_files:
+        data = f.read()
+        mime = f.type or "image/jpeg"
+        parts.append({"mime_type": mime, "data": base64.b64encode(data).decode()})
+    parts.append(prompt)
+
+    response = model.generate_content(parts)
+    raw = response.text.strip()
+    raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
+    return json.loads(raw)
+
+
+def _map_to_tickers(items: list[dict], universe: list[str], api_key: str,
+                    ticker_names: dict | None) -> list[dict]:
+    """2단계: 한글명 → 티커 매핑 (Gemini 텍스트 추론)."""
+    import google.generativeai as genai
+    genai.configure(api_key=api_key)
+
+    # 유니버스 매핑 문자열 구성
+    # ticker_names 있으면 영문명 포함, 없으면 힌트만
+    universe_lines = []
+    for t in universe:
+        eng_name = (ticker_names or {}).get(t, "")
+        if eng_name:
+            universe_lines.append(f"  {t}: {eng_name}")
+        else:
+            universe_lines.append(f"  {t}")
+    universe_str = "\n".join(universe_lines)
+
+    hints_str = "\n".join(f"  {k} -> {v}" for k, v in _KR_TICKER_HINTS.items())
+
+    names_str = "\n".join(f"  {i+1}. {item['name_kr']}" for i, item in enumerate(items))
+    items_json = json.dumps([{"name_kr": item["name_kr"]} for item in items],
+                            ensure_ascii=False)
+
+    prompt = f"""아래 한글 종목명들을 포트폴리오 티커로 매핑하세요.
+
+[포트폴리오 티커 목록]
 {universe_str}
 
-추가 참고 매핑 (한글명 → 티커):
+[추가 힌트]
 {hints_str}
 
+[매핑할 종목명]
+{names_str}
+
+각 종목명에 가장 적합한 티커를 위 목록에서 골라 매핑하세요.
+확신할 수 없으면 null로 응답하세요.
+
 JSON만 응답, 코드블록 없이:
-[{{"ticker":"AAPL","shares":0.409813,"name_kr":"애플"}}, ...]"""
+[{{"name_kr":"브로드컴","ticker":"AVGO"}}, ...]"""
+
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    response = model.generate_content(prompt)
+    raw = response.text.strip()
+    raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
+    mapping = json.loads(raw)
+
+    # 매핑 결과 합치기
+    map_dict = {m["name_kr"]: m.get("ticker") for m in mapping}
+    result = []
+    for item in items:
+        ticker = map_dict.get(item["name_kr"])
+        if ticker and ticker.upper() in universe:
+            result.append({
+                "ticker":  ticker.upper(),
+                "name_kr": item["name_kr"],
+                "shares":  item["shares"],
+            })
+    return result
+
+
+def _parse_portfolio_images(uploaded_files: list, api_key: str, universe: list[str]) -> list[dict]:
+    """Vision 추출 + 텍스트 매핑 2단계 처리."""
+    ticker_names = st.session_state.get("ticker_names")  # 종목명 조회 캐시 활용
+
+    # 1단계: 이미지에서 한글명 + 수량 추출
+    raw_items = _extract_names_and_shares(uploaded_files, api_key)
+
+    # 2단계: 한글명 → 티커 매핑
+    return _map_to_tickers(raw_items, universe, api_key, ticker_names)
 
     model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
@@ -164,7 +217,7 @@ def render(portfolio: Portfolio):
 
             if uploaded:
                 if st.button("🔍 AI로 종목/수량 추출", key="btn_extract_img", use_container_width=True):
-                    with st.spinner("Gemini Vision으로 분석 중..."):
+                    with st.spinner("1단계: 이미지에서 종목명·수량 추출 중..."):
                         try:
                             extracted = _parse_portfolio_images(uploaded, get_api_key(), portfolio.tickers())
                             # 유니버스 필터: 포트폴리오에 없는 티커 제거
