@@ -102,6 +102,32 @@ if "portfolio" not in st.session_state or st.session_state.get("_user_email") !=
 portfolio: Portfolio = st.session_state.portfolio
 
 # ─────────────────────────────────────────────
+# API 키 자동 로드 (세션 시작 시 1회)
+# ─────────────────────────────────────────────
+
+from utils.ai_client import (
+    has_api_key, set_api_key,
+    has_finnhub_key, set_finnhub_key,
+    has_marketaux_key, set_marketaux_key,
+)
+from core.secrets_store import load_api_key, load_finnhub_key, load_marketaux_key
+
+if not has_api_key():
+    _k, _ = load_api_key(_file_key)
+    if _k:
+        set_api_key(_k)
+
+if not has_finnhub_key():
+    _k, _ = load_finnhub_key(_file_key)
+    if _k:
+        set_finnhub_key(_k)
+
+if not has_marketaux_key():
+    _k, _ = load_marketaux_key(_file_key)
+    if _k:
+        set_marketaux_key(_k)
+
+# ─────────────────────────────────────────────
 # 헤더
 # ─────────────────────────────────────────────
 
