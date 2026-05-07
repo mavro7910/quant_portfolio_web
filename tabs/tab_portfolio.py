@@ -425,18 +425,26 @@ def render(portfolio: Portfolio):
 
     if prices_map is not None:
         total_krw = df_hold["평가금액 (KRW)"].sum()
-        c1, c2, c3 = st.columns(3)
+        total_usd = (df_hold["현재가 (USD)"] * df_hold["보유 수량"]).sum()
+        c1, c2, c3, c4 = st.columns(4)
         c1.markdown(
             f'<div class="metric-card"><div class="label">보유 종목 수</div>'
             f'<div class="value">{len(holdings)}개</div></div>',
             unsafe_allow_html=True,
         )
         c2.markdown(
-            f'<div class="metric-card"><div class="label">총 평가금액</div>'
+            f'<div class="metric-card"><div class="label">총 평가금액 (KRW)</div>'
             f'<div class="value">₩{total_krw:,.0f}</div></div>',
             unsafe_allow_html=True,
         )
         c3.markdown(
+            f'<div class="metric-card"><div class="label">총 평가금액 (USD)</div>'
+            f'<div class="value">${total_usd:,.2f}</div></div>' if total_usd else
+            f'<div class="metric-card"><div class="label">총 평가금액 (USD)</div>'
+            f'<div class="value">—</div></div>',
+            unsafe_allow_html=True,
+        )
+        c4.markdown(
             f'<div class="metric-card"><div class="label">USD/KRW</div>'
             f'<div class="value">{fx:,.2f}</div></div>',
             unsafe_allow_html=True,
