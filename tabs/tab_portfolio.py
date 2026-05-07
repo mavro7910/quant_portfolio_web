@@ -217,22 +217,27 @@ def render(portfolio: Portfolio):
 
             if uploaded:
                 if st.button("🔍 AI로 종목/수량 추출", key="btn_extract_img", use_container_width=True):
-                    with st.spinner("1단계: 이미지에서 종목명·수량 추출 중..."):
-                        try:
-                            extracted = _parse_portfolio_images(uploaded, get_api_key(), portfolio.tickers())
-                            # 유니버스 필터: 포트폴리오에 없는 티커 제거
-                            universe = set(portfolio.tickers())
-                            extracted = [e for e in extracted if e.get("ticker", "").upper().strip() in universe]
-                            # 중복 티커 제거 (같은 티커면 마지막 것만 유지)
+                    try:
+                        with st.status("AI 분석 중...", expanded=True) as status:
+                            st.write("1단계: 이미지에서 종목명·수량 추출 중...")
+                            raw_items = _extract_names_and_shares(uploaded, get_api_key())
+
+                            st.write(f"2단계: {len(raw_items)}개 종목명 → 티커 매핑 중...")
+                            ticker_names = st.session_state.get("ticker_names")
+                            extracted = _map_to_tickers(raw_items, portfolio.tickers(), get_api_key(), ticker_names)
+
+                            # 중복 티커 제거
                             seen = {}
                             for item in extracted:
                                 ticker = item.get("ticker", "").upper().strip()
                                 if ticker:
                                     seen[ticker] = item
                             extracted = list(seen.values())
-                            st.session_state["img_extracted"] = extracted
-                        except Exception as e:
-                            st.error(f"추출 실패: {e}")
+
+                            status.update(label=f"✅ 완료 · {len(extracted)}개 종목 추출", state="complete")
+                        st.session_state["img_extracted"] = extracted
+                    except Exception as e:
+                        st.error(f"추출 실패: {e}")
 
         # ── 추출 결과 검토 ──────────────────────────────────────
         if "img_extracted" in st.session_state:
