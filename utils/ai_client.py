@@ -605,7 +605,14 @@ def _gemini_batch(
     raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
 
     results_list = json.loads(raw)
-    result_map   = {}
+
+    # Gemini가 중첩 리스트로 응답하는 경우 방어
+    if isinstance(results_list, list) and results_list and isinstance(results_list[0], list):
+        results_list = results_list[0]
+    if isinstance(results_list, dict):
+        results_list = list(results_list.values())
+
+    result_map = {}
     for item in results_list:
         ticker = item.get("ticker", "")
         if not ticker:
@@ -805,6 +812,11 @@ def analyze_portfolio_signals(
             old = cached_map[ticker].copy()
             old["change_pct"]   = change_pct
             old["reused_cache"] = True
+            # change_pct 기준으로 signal 재계산
+            if change_pct is not None:
+                sig = old.get("signal", {})
+                if isinstance(sig, dict):
+                    sig["signal"] = "neutral" if abs(change_pct) < 0.5 else ("up" if change_pct > 0 else "down")
             results.append(old)
         else:
             ana  = analyst_ctx.get(ticker, {})
