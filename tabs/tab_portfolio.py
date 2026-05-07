@@ -17,24 +17,12 @@ from utils.ai_client import get_finnhub_key, has_finnhub_key, get_api_key, has_a
 # ─────────────────────────────────────────────
 
 _KR_TICKER_HINTS = {
-    "알파벳 a": "GOOGL", "알파벳a": "GOOGL", "알파벳": "GOOGL",
-    "애플": "AAPL",
-    "엔비디아": "NVDA",
-    "마이크로소프트": "MSFT", "마이크로소프 트": "MSFT",
-    "아마존": "AMZN",
-    "메타": "META",
-    "테슬라": "TSLA",
-    "브로드컴": "AVGO",
-    "램 리서치": "LRCX", "램리서치": "LRCX",
-    "어플라이드 머티리얼즈": "AMAT", "어플라이드머티리얼즈": "AMAT",
-    "tsmc": "TSM", "tsmc(adr)": "TSM",
-    "kla": "KLAC",
-    "asml 홀딩(adr)": "ASML", "asml홀딩": "ASML", "asml": "ASML",
-    "arm 홀딩스": "ARM", "arm홀딩스": "ARM",
-    "코스트코": "COST",
-    "마이크론 테크놀로지": "MU", "마이크론테크놀로지": "MU", "마이크론": "MU",
-    "amd": "AMD",
-    "ge 버노바": "GEV", "ge버노바": "GEV",
+    "알파벳 a": "GOOGL", "알파벳a": "GOOGL", "알파벳": "GOOGL",  # GOOG vs GOOGL
+    "ge 버노바": "GEV", "ge버노바": "GEV",                        # 신규 분사 종목
+    "tsmc(adr)": "TSM", "tsmc": "TSM",                           # ADR 표기
+    "asml 홀딩(adr)": "ASML", "asml홀딩(adr)": "ASML",           # ADR 표기
+    "arm 홀딩스(adr)": "ARM", "arm홀딩스(adr)": "ARM",            # ADR 표기
+    "kla": "KLAC",                                                # 표기명과 티커 불일치
 }
 
 
@@ -156,6 +144,13 @@ def render(portfolio: Portfolio):
                     with st.spinner("Gemini Vision으로 분석 중..."):
                         try:
                             extracted = _parse_portfolio_images(uploaded, get_api_key())
+                            # 중복 티커 제거 (같은 티커면 마지막 것만 유지)
+                            seen = {}
+                            for item in extracted:
+                                ticker = item.get("ticker", "").upper().strip()
+                                if ticker:
+                                    seen[ticker] = item
+                            extracted = list(seen.values())
                             st.session_state["img_extracted"] = extracted
                         except Exception as e:
                             st.error(f"추출 실패: {e}")
