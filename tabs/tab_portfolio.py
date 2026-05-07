@@ -30,22 +30,23 @@ _KR_TICKER_HINTS = {
 # Gemini Vision 추출
 # ─────────────────────────────────────────────
 
-def _parse_portfolio_images(uploaded_files: list, api_key: str) -> list[dict]:
-    """Gemini Vision으로 토스증권 캡쳐 이미지(여러 장)에서 종목/수량 추출."""
+def _parse_portfolio_images(uploaded_files: list, api_key: str, universe: list[str]) -> list[dict]:
+    """Gemini Vision으로 캡쳐 이미지(여러 장)에서 종목/수량 추출."""
     import google.generativeai as genai
     genai.configure(api_key=api_key)
 
     hints_str = "\n".join(f"  {k} -> {v}" for k, v in _KR_TICKER_HINTS.items())
+    universe_str = ", ".join(universe)
 
     prompt = f"""이미지에서 "숫자주" 패턴(예: 0.409813주, 1.23456주)을 모두 찾고,
 각 수량 바로 위에 있는 종목명과 쌍으로 추출하세요.
-종목명은 미국 주식 티커로 변환하세요.
 여러 장에 같은 종목이 있으면 마지막 이미지 기준으로 사용하세요.
 
-참고 매핑:
-{hints_str}
+종목명을 아래 유니버스 티커 중 하나로 매핑하세요. 반드시 이 목록 안에서만 선택하세요:
+{universe_str}
 
-목록에 없는 종목도 스스로 판단하세요. 예: 팔란티어 -> PLTR
+매핑 참고:
+{hints_str}
 
 JSON만 응답, 코드블록 없이:
 [{{"ticker":"AAPL","shares":0.409813,"name_kr":"애플"}}, ...]"""
@@ -143,7 +144,7 @@ def render(portfolio: Portfolio):
                 if st.button("🔍 AI로 종목/수량 추출", key="btn_extract_img", use_container_width=True):
                     with st.spinner("Gemini Vision으로 분석 중..."):
                         try:
-                            extracted = _parse_portfolio_images(uploaded, get_api_key())
+                            extracted = _parse_portfolio_images(uploaded, get_api_key(), portfolio.tickers())
                             # 중복 티커 제거 (같은 티커면 마지막 것만 유지)
                             seen = {}
                             for item in extracted:
