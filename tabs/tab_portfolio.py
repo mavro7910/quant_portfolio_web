@@ -30,22 +30,45 @@ _KR_TICKER_HINTS = {
 # Gemini Vision 추출
 # ─────────────────────────────────────────────
 
+def _fetch_ticker_names(tickers: list[str]) -> dict[str, str]:
+    """yfinance로 티커 → 영문 회사명 매핑 (캐시 활용)."""
+    cached = st.session_state.get("_ticker_names_cache", {})
+    missing = [t for t in tickers if t not in cached]
+
+    if missing:
+        import yfinance as yf
+        for t in missing:
+            try:
+                info = yf.Ticker(t).info
+                name = info.get("shortName") or info.get("longName") or t
+                cached[t] = name
+            except Exception:
+                cached[t] = t
+        st.session_state["_ticker_names_cache"] = cached
+
+    return {t: cached.get(t, t) for t in tickers}
+
+
 def _parse_portfolio_images(uploaded_files: list, api_key: str, universe: list[str]) -> list[dict]:
     """Gemini Vision으로 캡쳐 이미지(여러 장)에서 종목/수량 추출."""
     import google.generativeai as genai
     genai.configure(api_key=api_key)
 
+    # 포트폴리오 티커 → 영문 회사명 매핑
+    name_map = _fetch_ticker_names(universe)
+    universe_str = "\n".join(f"  {ticker}: {name}" for ticker, name in name_map.items())
+
     hints_str = "\n".join(f"  {k} -> {v}" for k, v in _KR_TICKER_HINTS.items())
 
     prompt = f"""이미지에서 "숫자주" 패턴(예: 0.409813주, 1.23456주)을 모두 찾고,
 각 수량 바로 위에 있는 종목명과 쌍으로 추출하세요.
-종목명은 미국 주식 티커로 변환하세요.
 여러 장에 같은 종목이 있으면 마지막 이미지 기준으로 사용하세요.
 
-참고 매핑:
-{hints_str}
+아래는 포트폴리오 티커와 영문 회사명입니다. 이미지의 종목명을 이 목록의 티커로 매핑하세요:
+{universe_str}
 
-목록에 없는 종목도 스스로 판단하세요. 예: 팔란티어 -> PLTR
+추가 참고 매핑 (한글명 → 티커):
+{hints_str}
 
 JSON만 응답, 코드블록 없이:
 [{{"ticker":"AAPL","shares":0.409813,"name_kr":"애플"}}, ...]"""
