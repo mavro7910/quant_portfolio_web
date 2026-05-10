@@ -91,10 +91,56 @@ def validate_marketaux_key(api_key: str) -> tuple[bool, str | None]:
 # 애널리스트 데이터 수집
 # ─────────────────────────────────────────────
 
-def fetch_analyst_data(tickers: list[str]) -> dict[str, dict]:
+def _fetch_analyst_finnhub(ticker: str, finnhub_key: str) -> dict:
+    """Finnhub에서 투자의견·목표주가 수집."""
+    import requests
+    data = {}
+    headers = {"X-Finnhub-Token": finnhub_key}
+    base = "https://finnhub.io/api/v1"
+    try:
+        # 목표주가
+        r = requests.get(f"{base}/stock/price-target",
+                         params={"symbol": ticker}, headers=headers, timeout=5)
+        pt = r.json()
+        if pt.get("targetMean") and float(pt["targetMean"]) > 0:
+            data["target_mean"] = float(pt["targetMean"])
+            data["target_high"] = float(pt.get("targetHigh") or 0) or None
+            data["target_low"]  = float(pt.get("targetLow")  or 0) or None
+            data["n_analysts"]  = pt.get("numberOfAnalysts")
+    except Exception:
+        pass
+    try:
+        # 투자의견
+        r = requests.get(f"{base}/stock/recommendation",
+                         params={"symbol": ticker}, headers=headers, timeout=5)
+        recs = r.json()
+        if recs and isinstance(recs, list):
+            latest = recs[0]
+            sb = int(latest.get("strongBuy",  0) or 0)
+            b  = int(latest.get("buy",        0) or 0)
+            h  = int(latest.get("hold",       0) or 0)
+            s  = int(latest.get("sell",       0) or 0)
+            ss = int(latest.get("strongSell", 0) or 0)
+            total = sb + b + h + s + ss
+            if total > 0:
+                data["n_analysts"] = data.get("n_analysts") or total
+                if sb / total > 0.4:
+                    data["rec_key"] = "STRONG_BUY"
+                elif (sb + b) / total > 0.5:
+                    data["rec_key"] = "BUY"
+                elif (s + ss) / total > 0.4:
+                    data["rec_key"] = "SELL"
+                else:
+                    data["rec_key"] = "HOLD"
+    except Exception:
+        pass
+    return data
+
+
+def fetch_analyst_data(tickers: list[str], finnhub_key: str | None = None) -> dict[str, dict]:
     """
     투자의견, 목표주가, 어닝 일정, EPS 서프라이즈 수집.
-    info → analyst_price_targets → recommendations_summary 순으로 fallback.
+    Finnhub(우선) → yfinance info → analyst_price_targets → recommendations_summary 순으로 fallback.
     """
     import yfinance as yf
     import pandas as pd
@@ -192,13 +238,20 @@ def fetch_analyst_data(tickers: list[str]) -> dict[str, dict]:
                 except Exception:
                     pass
 
-            # ── ⑤ 상승여력 계산 ─────────────────────────────────
+            # ── ⑤ Finnhub로 빈값 보완 ──────────────────────────
+            if finnhub_key and (not data.get("target_mean") or not data.get("rec_key")):
+                fh = _fetch_analyst_finnhub(t, finnhub_key)
+                for k, v in fh.items():
+                    if v is not None and not data.get(k):
+                        data[k] = v
+
+            # ── ⑥ 상승여력 계산 ─────────────────────────────────
             curr  = data.get("current_price")
             tmean = data.get("target_mean")
             if curr and tmean and float(curr) > 0:
                 data["target_upside_pct"] = round((float(tmean) / float(curr) - 1) * 100, 1)
 
-            # ── ⑥ 어닝 발표일 ───────────────────────────────────
+            # ── ⑦ 어닝 발표일 ───────────────────────────────────
             try:
                 cal = tk.calendar
                 ed  = None
@@ -762,7 +815,7 @@ def analyze_portfolio_signals(
     if progress_callback:
         progress_callback(0, total, "애널리스트 데이터 수집 중", None)
 
-    analyst_ctx = fetch_analyst_data(tickers)
+    analyst_ctx = fetch_analyst_data(tickers, finnhub_key=finnhub_key)
 
     # ── 3단계: 스마트 캐시 분리 ─────────────────────────────────
     cached_map: dict[str, dict] = {}
