@@ -6,6 +6,10 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from core.portfolio import Portfolio
+from core.strategy import (
+    fetch_prices, fetch_market_caps,
+    MOMENTUM_WEIGHTS, VOL_WINDOW, MA_WINDOW,
+)
 
 
 def render(portfolio: Portfolio):
@@ -46,16 +50,12 @@ def render(portfolio: Portfolio):
 
 
 def _run_sell_analysis(portfolio, top_n_sell, use_mcap6):
-    from core.strategy import fetch_prices, fetch_market_caps
     tickers_all = portfolio.tickers()
     if "mcap_cache6" in st.session_state:
         del st.session_state["mcap_cache6"]
 
     with st.spinner("1달치 일별 랭킹 계산 중..."):
         try:
-            MOMENTUM_WEIGHTS_LOCAL = {21: 0.1, 63: 0.2, 126: 0.3, 252: 0.4}
-            VOL_WINDOW_LOCAL = 60
-
             data6   = fetch_prices(tickers_all, extra=["QQQ"], period="14mo")
             prices6 = data6["prices"].reindex(columns=tickers_all).ffill()
             qqq6    = data6.get("QQQ", pd.Series(dtype=float))
@@ -73,7 +73,7 @@ def _run_sell_analysis(portfolio, top_n_sell, use_mcap6):
 
                 mom    = pd.Series(0.0, index=sub.columns)
                 total_w = 0.0
-                for days, w in MOMENTUM_WEIGHTS_LOCAL.items():
+                for days, w in MOMENTUM_WEIGHTS.items():
                     if len(sub) <= days:
                         continue
                     ret = sub.pct_change(days).iloc[-1].fillna(0)
@@ -82,13 +82,13 @@ def _run_sell_analysis(portfolio, top_n_sell, use_mcap6):
                 if total_w > 0:
                     mom /= total_w
 
-                vol      = sub.pct_change().rolling(VOL_WINDOW_LOCAL).std().iloc[-1]
+                vol      = sub.pct_change().rolling(VOL_WINDOW).std().iloc[-1]
                 inv      = (1 / vol.replace(0, np.nan)).fillna(0)
                 vol_rank = inv.rank(pct=True) if inv.sum() > 0 else pd.Series(1.0 / len(sub.columns), index=sub.columns)
 
                 if qqq6 is not None and len(qqq6) > loc:
                     qqq_sub  = qqq6.iloc[start_loc: loc + 1]
-                    is_bull6 = float(qqq_sub.iloc[-1]) > float(qqq_sub.rolling(200).mean().iloc[-1]) if len(qqq_sub) >= 200 else True
+                    is_bull6 = float(qqq_sub.iloc[-1]) > float(qqq_sub.rolling(MA_WINDOW).mean().iloc[-1]) if len(qqq_sub) >= MA_WINDOW else True
                 else:
                     is_bull6 = True
 

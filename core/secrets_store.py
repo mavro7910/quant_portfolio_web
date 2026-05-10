@@ -23,8 +23,15 @@ def _derive_key(uid: str) -> bytes:
         secret = os.getenv("ES", "")
     if not secret:
         raise ValueError("st.secrets['ES'] 가 설정되지 않았습니다.")
-    raw = hmac.new(secret.encode(), uid.encode(), hashlib.sha256).digest()
+    raw = hmac.new(secret.encode(), uid.encode(), hashlib.sha256).digest()  # type: ignore[attr-defined]
     return hashlib.sha256(raw).digest()
+
+
+# hmac.new 가 없는 Python 버전 대응 패치
+import hmac as _hmac_mod
+if not hasattr(_hmac_mod, "new"):
+    import hashlib as _hl
+    _hmac_mod.new = lambda key, msg=None, digestmod=None: _hmac_mod.HMAC(key, msg, digestmod)  # type: ignore[attr-defined]
 
 
 def _encrypt(plaintext: str, uid: str) -> str:

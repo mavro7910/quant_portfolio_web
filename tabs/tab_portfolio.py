@@ -126,20 +126,6 @@ def _parse_portfolio_images(uploaded_files: list, api_key: str, universe: list[s
     # 2단계: 한글명 → 티커 매핑
     return _map_to_tickers(raw_items, universe, api_key, ticker_names)
 
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
-
-    parts = []
-    for f in uploaded_files:
-        data = f.read()
-        mime = f.type or "image/jpeg"
-        parts.append({"mime_type": mime, "data": base64.b64encode(data).decode()})
-    parts.append(prompt)
-
-    response = model.generate_content(parts)
-    raw = response.text.strip()
-    raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()
-    return json.loads(raw)
-
 
 # ─────────────────────────────────────────────
 # 렌더
@@ -367,7 +353,7 @@ def render(portfolio: Portfolio):
         "보유 수량":      st.column_config.NumberColumn(format="%.6f"),
     }
 
-    col_btn_ref, col_btn_name = st.columns([1, 1])
+    col_btn_ref, col_btn_name, col_auto = st.columns([1, 1, 1])
     with col_btn_ref:
         if st.button("🔄 시세 갱신", key="btn_refresh"):
             with st.spinner("시세 가져오는 중..."):
@@ -377,6 +363,23 @@ def render(portfolio: Portfolio):
                     st.rerun()
                 except Exception as e:
                     st.error(f"시세 조회 실패: {e}")
+    with col_auto:
+        auto_refresh = st.toggle(
+            "탭 진입 시 자동 갱신",
+            value=st.session_state.get("auto_refresh_prices", False),
+            key="toggle_auto_refresh",
+        )
+        st.session_state["auto_refresh_prices"] = auto_refresh
+
+    # 자동 갱신: 포트폴리오에 종목이 있고 캐시가 없을 때만 조회
+    if auto_refresh and portfolio.tickers() and "prices_data" not in st.session_state:
+        with st.spinner("시세 자동 갱신 중..."):
+            try:
+                prices, fx_new, fx_est_new = fetch_prices_and_fx(portfolio.tickers())
+                st.session_state["prices_data"] = (prices, fx_new, fx_est_new)
+                st.rerun()
+            except Exception as e:
+                st.warning(f"자동 갱신 실패: {e}")
     with col_btn_name:
         if st.button("🔍 종목명 조회", key="btn_names"):
             with st.spinner("종목명 가져오는 중..."):

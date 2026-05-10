@@ -240,7 +240,7 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
         unsafe_allow_html=True,
     )
 
-    # ── JSON 내보내기/불러오기    # ── JSON 내보내기/불러오기 ──────────────────────────────────────
+    # ── JSON 내보내기/불러오기 ──────────────────────────────────────
     st.markdown('<div class="section-label">포트폴리오 JSON 내보내기</div>', unsafe_allow_html=True)
     json_str = json.dumps(portfolio._data, ensure_ascii=False, indent=2)
     st.download_button(

@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from core.portfolio import Portfolio
-from core.strategy import buy_recommendation
+from core.strategy import rebalance_weights
 
 
 def render(portfolio: Portfolio):
@@ -43,9 +43,8 @@ def render(portfolio: Portfolio):
     if run_rebal:
         with st.spinner("시세 및 목표 비중 계산 중..."):
             try:
-                res_rb = buy_recommendation(
+                res_rb = rebalance_weights(
                     holdings=portfolio.holdings,
-                    budget_krw=portfolio.weekly_budget,
                     use_market_cap=rb_use_mcap,
                     top_n=int(rb_top_n),
                 )

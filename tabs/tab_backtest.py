@@ -43,9 +43,9 @@ QQQ의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</
 
     col_p, col_m2, col_bm, col_run2 = st.columns([1.5, 1.5, 2.5, 1.5])
     with col_p:
-        period_label = st.selectbox("기간", ["2년", "3년", "5년"], index=1)
+        period_label = st.selectbox("기간", ["2년", "3년", "5년", "직접 입력"], index=1)
         period_map   = {"2년": "2y", "3년": "3y", "5년": "5y"}
-        period_str   = period_map[period_label]
+        period_str   = period_map.get(period_label, "3y")
     with col_m2:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         use_mcap_bt = st.checkbox("시총 가중 반영", value=True)
@@ -58,20 +58,47 @@ QQQ의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_bt = st.button("▶ 백테스트 실행", key="btn_bt")
 
+    # 직접 입력 모드일 때 날짜 입력 UI 표시
+    custom_start = custom_end = None
+    if period_label == "직접 입력":
+        col_sd, col_ed = st.columns(2)
+        with col_sd:
+            custom_start = st.date_input(
+                "시작일",
+                value=date.today() - timedelta(days=1095),
+                max_value=date.today() - timedelta(days=365),
+                key="bt_custom_start",
+            )
+        with col_ed:
+            custom_end = st.date_input(
+                "종료일",
+                value=date.today(),
+                max_value=date.today(),
+                key="bt_custom_end",
+            )
+        if custom_start >= custom_end:
+            st.error("시작일이 종료일보다 앞서야 합니다.")
+
     n_tickers = portfolio.get_setting("top_n", 10)
     st.caption(f"📌 주간 투자금: ₩{portfolio.weekly_budget:,} | 등록 종목: {len(portfolio.holdings)}개 | 매수 집중 Top N: {n_tickers}개")
 
     if run_bt:
         if not portfolio.tickers():
             st.error("포트폴리오 탭에서 종목을 먼저 추가하세요.")
+        elif period_label == "직접 입력" and (custom_start is None or custom_end is None or custom_start >= custom_end):
+            st.error("올바른 날짜 범위를 입력하세요.")
         else:
             bm_tickers = [b.strip().upper() for b in bm_input.split(",") if b.strip()]
             portfolio.benchmarks = bm_tickers
             portfolio.save()
 
-            period_to_days = {"2y": 730, "3y": 1095, "5y": 1825}
-            end_date   = date.today().strftime("%Y-%m-%d")
-            start_date = (date.today() - timedelta(days=period_to_days[period_str])).strftime("%Y-%m-%d")
+            if period_label == "직접 입력":
+                start_date = custom_start.strftime("%Y-%m-%d")
+                end_date   = custom_end.strftime("%Y-%m-%d")
+            else:
+                period_to_days = {"2y": 730, "3y": 1095, "5y": 1825}
+                end_date   = date.today().strftime("%Y-%m-%d")
+                start_date = (date.today() - timedelta(days=period_to_days[period_str])).strftime("%Y-%m-%d")
 
             progress_bar = st.progress(0)
             status_text  = st.empty()

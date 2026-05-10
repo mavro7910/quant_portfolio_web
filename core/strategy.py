@@ -311,9 +311,60 @@ def buy_recommendation(
     }
 
 
-# ──────────────────────────────────────────────
-# 백테스트
-# ──────────────────────────────────────────────
+def rebalance_weights(
+    holdings: dict[str, float],
+    use_market_cap: bool = False,
+    top_n: int | None = None,
+    max_weight: float = MAX_WEIGHT,
+) -> dict:
+    """
+    리밸런싱 전용 함수.
+    buy_recommendation 과 달리 예산 배분 로직 없이
+    현재 시총 기준 목표 비중과 현재가만 반환.
+    """
+    tickers = list(holdings.keys())
+    data = fetch_prices(tickers, extra=["QQQ", "USDKRW=X"])
+
+    prices_df = data["prices"].reindex(columns=tickers).ffill()
+    qqq_s = data.get("QQQ", pd.Series(dtype=float))
+    fx_s  = data.get("USDKRW=X", pd.Series(dtype=float))
+
+    if prices_df.empty or qqq_s.empty:
+        raise ValueError("시장 데이터를 불러오지 못했습니다.")
+
+    fx_estimated = False
+    if fx_s.empty or fx_s.dropna().empty:
+        fx_rate = FX_FALLBACK
+        fx_estimated = True
+    else:
+        fx_rate = float(fx_s.dropna().iloc[-1])
+
+    curr_p = prices_df.iloc[-1]
+    mcap_cache = fetch_market_caps(tickers) if use_market_cap else None
+
+    w_target, is_bull = target_weights(
+        prices_df, qqq_s,
+        use_market_cap=use_market_cap,
+        tickers=tickers,
+        max_weight=max_weight,
+        mcap_cache=mcap_cache,
+    )
+
+    if top_n is not None:
+        top_t    = w_target.nlargest(top_n).index
+        w_target = w_target.loc[top_t]
+        w_target = w_target / w_target.sum()
+
+    return {
+        "weights":      w_target,
+        "prices":       curr_p,
+        "fx_rate":      fx_rate,
+        "fx_estimated": fx_estimated,
+        "is_bull":      is_bull,
+    }
+
+
+
 
 BENCHMARKS = {
     "QQQM": "QQQM (Nasdaq 100)",
