@@ -49,9 +49,15 @@ _DEFAULTS = {
     "benchmarks": ["QQQM", "SPY"],
     "settings": {
         "top_n": 10,
-        "use_mcap": True,
         "ai_provider": "gemini",
         "signal_lang": "ko",
+        # 탭별 마지막 설정 (각 탭에서 자동 저장)
+        "buy_use_mcap": True,
+        "bt_period": "3년",
+        "sell_top_n": 15,
+        "sell_use_mcap": True,
+        "rebal_top_n": 15,
+        "rebal_use_mcap": True,
     },
 }
 

@@ -25,16 +25,18 @@ def render(portfolio: Portfolio):
 
     col_top, col_mcap6, col_run6 = st.columns([2, 1.5, 1.5])
     with col_top:
+        _max_sell = len(portfolio.tickers()) if portfolio.tickers() else 50
+        _saved_sell_n = portfolio.get_setting("sell_top_n", 15)
         top_n_sell = st.number_input(
             "유지 기준 순위 (Top N)",
             min_value=1,
-            max_value=len(portfolio.tickers()) if portfolio.tickers() else 50,
-            value=min(15, len(portfolio.tickers())) if portfolio.tickers() else 15,
+            max_value=_max_sell,
+            value=min(_saved_sell_n, _max_sell),
             step=1,
         )
     with col_mcap6:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
-        use_mcap6 = st.checkbox("시가총액 가중 사용", value=True, key="sell_mcap")
+        use_mcap6 = st.checkbox("시가총액 가중 사용", value=portfolio.get_setting("sell_use_mcap", True), key="sell_mcap")
     with col_run6:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_sell = st.button("🔍 매도 후보 분석", key="btn_sell_signal")
@@ -43,6 +45,9 @@ def render(portfolio: Portfolio):
         if not portfolio.tickers():
             st.error("포트폴리오 탭에서 종목을 먼저 입력하세요.")
         else:
+            portfolio.set_setting("sell_top_n", int(top_n_sell))
+            portfolio.set_setting("sell_use_mcap", use_mcap6)
+            portfolio.save()
             _run_sell_analysis(portfolio, top_n_sell, use_mcap6)
 
     if "sell_result" in st.session_state:

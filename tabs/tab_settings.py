@@ -34,7 +34,7 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
             placeholder="QQQM, XLK, SPY",
         )
 
-    col_s3, col_s4 = st.columns(2)
+    col_s3, _ = st.columns(2)
     with col_s3:
         _max_n_cfg   = len(portfolio.tickers()) if portfolio.tickers() else 20
         _saved_n_cfg = portfolio.get_setting("top_n", 10)
@@ -45,11 +45,6 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
             value=min(_saved_n_cfg, _max_n_cfg),
             step=1,
         )
-    with col_s4:
-        new_use_mcap = st.checkbox(
-            "시가총액 가중 기본값",
-            value=portfolio.get_setting("use_mcap", True),
-        )
 
     if st.button("💾 설정 저장", key="btn_save_settings"):
         portfolio.weekly_budget = new_budget
@@ -59,7 +54,6 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
         else:
             portfolio.benchmarks = bms
             portfolio.set_setting("top_n", int(new_top_n))
-            portfolio.set_setting("use_mcap", new_use_mcap)
             portfolio.save()
             st.success("✅ 설정이 저장되었습니다!")
 

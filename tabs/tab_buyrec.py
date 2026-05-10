@@ -42,7 +42,7 @@ def render(portfolio: Portfolio):
     with col_m:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         use_mcap = st.checkbox(
-            "시가총액 가중 사용", value=portfolio.get_setting("use_mcap", True),
+            "시가총액 가중 사용", value=portfolio.get_setting("buy_use_mcap", True),
             help="현재 시점 시총 기준으로 비중 조정.",
         )
     with col_run:
@@ -67,7 +67,7 @@ def render(portfolio: Portfolio):
             st.error("포트폴리오 탭에서 종목을 먼저 입력하세요.")
         else:
             portfolio.weekly_budget = budget
-            portfolio.set_setting("use_mcap", use_mcap)
+            portfolio.set_setting("buy_use_mcap", use_mcap)
             portfolio.set_setting("top_n", int(n_tickers))
             portfolio.save()
             with st.spinner("데이터 수집 중... (수십 초 소요될 수 있습니다)"):

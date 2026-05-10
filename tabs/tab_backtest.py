@@ -41,14 +41,46 @@ QQQ의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</
 </div>
 """, unsafe_allow_html=True)
 
-    col_p, col_m2, col_bm, col_run2 = st.columns([1.5, 1.5, 2.5, 1.5])
+    # ── 매수 추천 탭에서 저장된 설정 가져오기 ────────────────────
+    use_mcap  = portfolio.get_setting("buy_use_mcap", True)
+    n_tickers = portfolio.get_setting("top_n", 10)
+    buy_res   = st.session_state.get("buy_result")
+
+    # 현재 매수 추천 기준 배너
+    mcap_label = "시총 가중" if use_mcap else "균등 가중"
+    if buy_res:
+        tickers_r = buy_res["tickers"]
+        weights   = buy_res["weights"]
+        weight_parts = ", ".join(
+            f"{t} {weights.get(t, 0)*100:.1f}%" for t in tickers_r
+        )
+        st.markdown(
+            f'<div class="success-banner">'
+            f'📌 <b>매수 추천 기준으로 백테스트</b> · {mcap_label} · Top {n_tickers}개<br>'
+            f'<span style="font-size:0.8rem;color:#a5d6a7">{weight_parts}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div class="info-banner">'
+            f'📌 매수 추천 탭 기준으로 실행됩니다 · <b>{mcap_label}</b> · <b>Top {n_tickers}개</b><br>'
+            f'<span style="font-size:0.8rem;color:#7986cb">'
+            f'매수 추천을 먼저 실행하면 종목별 비중도 함께 표시됩니다.</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── 기간 / 벤치마크 / 실행 ───────────────────────────────────
+    _saved_period = portfolio.get_setting("bt_period", "3년")
+    _period_opts  = ["2년", "3년", "5년", "직접 입력"]
+    _period_idx   = _period_opts.index(_saved_period) if _saved_period in _period_opts else 1
+
+    col_p, col_bm, col_run2 = st.columns([1.5, 3, 1.5])
     with col_p:
-        period_label = st.selectbox("기간", ["2년", "3년", "5년", "직접 입력"], index=1)
+        period_label = st.selectbox("기간", _period_opts, index=_period_idx)
         period_map   = {"2년": "2y", "3년": "3y", "5년": "5y"}
         period_str   = period_map.get(period_label, "3y")
-    with col_m2:
-        st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
-        use_mcap_bt = st.checkbox("시총 가중 반영", value=True)
     with col_bm:
         bm_input = st.text_input(
             "벤치마크 티커 (쉼표 구분)",
@@ -58,7 +90,7 @@ QQQ의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_bt = st.button("▶ 백테스트 실행", key="btn_bt")
 
-    # 직접 입력 모드일 때 날짜 입력 UI 표시
+    # 직접 입력 모드 날짜 UI
     custom_start = custom_end = None
     if period_label == "직접 입력":
         col_sd, col_ed = st.columns(2)
@@ -79,8 +111,11 @@ QQQ의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</
         if custom_start >= custom_end:
             st.error("시작일이 종료일보다 앞서야 합니다.")
 
-    n_tickers = portfolio.get_setting("top_n", 10)
-    st.caption(f"📌 주간 투자금: ₩{portfolio.weekly_budget:,} | 등록 종목: {len(portfolio.holdings)}개 | 매수 집중 Top N: {n_tickers}개")
+    st.caption(
+        f"📌 주간 투자금: ₩{portfolio.weekly_budget:,} | "
+        f"등록 종목: {len(portfolio.holdings)}개 | "
+        f"매수 집중 Top N: {n_tickers}개 | {mcap_label}"
+    )
 
     if run_bt:
         if not portfolio.tickers():
@@ -90,6 +125,7 @@ QQQ의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</
         else:
             bm_tickers = [b.strip().upper() for b in bm_input.split(",") if b.strip()]
             portfolio.benchmarks = bm_tickers
+            portfolio.set_setting("bt_period", period_label)
             portfolio.save()
 
             if period_label == "직접 입력":
@@ -115,7 +151,7 @@ QQQ의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</
                         weekly_budget=portfolio.weekly_budget,
                         benchmark_tickers=bm_tickers,
                         period=period_str,
-                        use_market_cap=use_mcap_bt,
+                        use_market_cap=use_mcap,
                         progress_cb=progress_cb,
                         top_n=int(n_tickers),
                         start=start_date,
@@ -184,18 +220,18 @@ QQQ의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</
     all_cols     = ["KH_Strategy"] + bm_cols
 
     for col in all_cols:
-        final   = df_bt[col].iloc[-1]
-        ret_pct = (final / invested - 1) * 100 if invested > 0 else 0.0
+        final    = df_bt[col].iloc[-1]
+        ret_pct  = (final / invested - 1) * 100 if invested > 0 else 0.0
         xirr_val = calc_xirr_from_backtest(df_bt, portfolio.weekly_budget, col=col)
         xirr_pct = xirr_val * 100 if not np.isnan(xirr_val) else None
         running_max = df_bt[col].cummax()
         mdd = ((running_max - df_bt[col]) / running_max.replace(0, np.nan)).max() * 100
         summary_rows.append({
-            "전략/벤치마크":          "✅ KH 전략" if col == "KH_Strategy" else col,
-            "최종 평가금액 (M원)":    final / 1_000_000,
-            "누적 수익률 (%)":        ret_pct,
-            "XIRR (%)":              xirr_pct,
-            "MDD (%)":               mdd,
+            "전략/벤치마크":       "✅ KH 전략" if col == "KH_Strategy" else col,
+            "최종 평가금액 (M원)": final / 1_000_000,
+            "누적 수익률 (%)":     ret_pct,
+            "XIRR (%)":           xirr_pct,
+            "MDD (%)":            mdd,
         })
 
     summary_rows.append({
@@ -217,3 +253,13 @@ QQQ의 현재가가 200일 이동평균선 위에 있으면 <b>강세장(Bull)</
         f"기간: {df_bt.index[0].date()} ~ {df_bt.index[-1].date()} | "
         "XIRR = 각 투자 시점을 반영한 실질 연수익률"
     )
+
+
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+from datetime import date, timedelta
+
+from core.portfolio import Portfolio
+from core.strategy import run_backtest, calc_xirr_from_backtest, BENCHMARKS

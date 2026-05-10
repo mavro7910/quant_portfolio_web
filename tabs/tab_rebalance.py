@@ -26,13 +26,15 @@ def render(portfolio: Portfolio):
 
     col_rb1, col_rb2, col_rb3 = st.columns([1.5, 1.5, 1.5])
     with col_rb1:
-        rb_use_mcap = st.checkbox("시가총액 가중 사용", value=True, key="rb_mcap")
+        rb_use_mcap = st.checkbox("시가총액 가중 사용", value=portfolio.get_setting("rebal_use_mcap", True), key="rb_mcap")
     with col_rb2:
+        _max_rebal = len(portfolio.tickers())
+        _saved_rebal_n = portfolio.get_setting("rebal_top_n", 15)
         rb_top_n = st.number_input(
             "비중 산출 종목 수 (Top N)",
             min_value=1,
-            max_value=len(portfolio.tickers()),
-            value=min(15, len(portfolio.tickers())),
+            max_value=_max_rebal,
+            value=min(_saved_rebal_n, _max_rebal),
             step=1,
             key="rb_topn",
         )
@@ -41,6 +43,9 @@ def render(portfolio: Portfolio):
         run_rebal = st.button("🔄 리밸런싱 계산 실행", key="btn_rebal")
 
     if run_rebal:
+        portfolio.set_setting("rebal_use_mcap", rb_use_mcap)
+        portfolio.set_setting("rebal_top_n", int(rb_top_n))
+        portfolio.save()
         with st.spinner("시세 및 목표 비중 계산 중..."):
             try:
                 res_rb = rebalance_weights(

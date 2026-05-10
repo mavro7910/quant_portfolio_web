@@ -570,7 +570,11 @@ JSON 배열로만 응답 (코드블록 없이):
 
 rules:
 - 한국어
-- signal: 뉴스+애널리스트 종합. 상충 신호 있으면 neutral
+- signal 판정 기준 (반드시 준수):
+  up: 명확한 호재 뉴스 AND 애널리스트 긍정 신호가 동시에 존재할 때만
+  down: 명확한 악재 뉴스 AND 애널리스트 부정 신호가 동시에 존재할 때만
+  neutral: 그 외 모든 경우. 뉴스 없음/혼재/단순 등락/한쪽 신호만 있을 때
+  → 확신 없으면 반드시 neutral. up/down은 명백한 근거 있을 때만 사용
 - reason: 40자 이내, 가장 핵심적인 판단 한 문장
 - bullets 정확히 4개:
   ①뉴스해석: 뉴스 본문 내용 기반 해석. 뉴스 없으면 "최근 유의미한 뉴스 없음"
@@ -668,7 +672,8 @@ def _gemini_single(
         f"애널리스트: {ana_str}\n"
         f"사전감지신호: {conflict}\n"
         f"뉴스:{news_note}\n{news_str}\n\n"
-        f'JSON:{{"signal":"up/down/neutral","reason":"40자이내","bullets":["뉴스해석","애널리스트해석(상충포함)","조건부액션","AI종합의견(확인된데이터만근거)"],"tags":["태그1"],"related":[]}}'
+        f'JSON:{{"signal":"up/down/neutral","reason":"40자이내","bullets":["뉴스해석","애널리스트해석(상충포함)","조건부액션","AI종합의견(확인된데이터만근거)"],"tags":["태그1"],"related":[]}}\n'
+        "signal 기준: up=호재뉴스+애널리스트긍정 동시 / down=악재뉴스+애널리스트부정 동시 / neutral=그 외 모든 경우(확신없으면neutral)"
     )
 
     response = model.generate_content(prompt)
@@ -691,7 +696,7 @@ def _gemini_single(
 # 스마트 캐시
 # ─────────────────────────────────────────────
 
-REANALYZE_THRESHOLD = 0.5
+REANALYZE_THRESHOLD = 2.0  # 전일 대비 2% 이상 변동 시만 재분석 (잦은 up/down 방지)
 
 
 def _needs_reanalysis(
