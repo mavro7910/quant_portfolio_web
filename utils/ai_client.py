@@ -469,7 +469,13 @@ _SYSTEM_PROMPT = """당신은 미국 주식 포트폴리오 분석 AI입니다.
 - 애널리스트 데이터도 없으면 "정보 부족으로 판단 유보"라고 명시하세요
 - 상충하는 신호(예: 강력매수인데 현재가가 목표가 상회, 어닝 임박인데 직전 EPS 미스)가 있으면 반드시 언급하세요
 - 액션은 구체적 조건과 함께 제시하세요. "비중 유지" 단독 사용 금지
-- JSON 배열만 응답하세요. 코드블록, 설명 텍스트 절대 없이"""
+- JSON 배열만 응답하세요. 코드블록, 설명 텍스트 절대 없이
+
+[signal 판정 — 반드시 준수]
+- up: 호재 뉴스 AND 애널리스트 긍정이 동시에 있을 때만
+- down: 악재 뉴스 AND 애널리스트 부정이 동시에 있을 때만
+- neutral: 위 두 조건에 해당하지 않는 모든 경우 (뉴스 없음, 혼재, 한쪽만 있음, 단순 등락)
+- 확신이 없으면 neutral. neutral이 가장 흔한 정상 상태임"""
 
 
 def _format_news_block(articles: list[dict]) -> str:
@@ -704,6 +710,9 @@ def _needs_reanalysis(
     change_pct: float | None,
     cached_results: list[dict],
 ) -> bool:
+    """캐시 미존재 또는 변동 2% 초과 시 재분석.
+    캐시가 있어도 signal은 항상 재판정 (analyze_portfolio_signals에서 처리).
+    """
     if change_pct is None:
         return True
     if abs(change_pct) >= REANALYZE_THRESHOLD:
@@ -774,17 +783,17 @@ def analyze_portfolio_signals(
     # ── 4단계: Gemini 배치 분석 ─────────────────────────────────
     signal_map: dict[str, dict] = {}
 
-    for t in keep_tickers:
-        if t in cached_map:
-            signal_map[t] = cached_map[t].get("signal", {})
+    # keep_tickers: 뉴스/데이터는 캐시 재사용, signal은 항상 Gemini 재판정
+    # (캐시된 signal을 그대로 쓰면 프롬프트 개선이 반영되지 않음)
+    all_reanalyze = list(reanalyze_tickers) + list(keep_tickers)
 
-    if reanalyze_tickers:
+    if all_reanalyze:
         if progress_callback:
             progress_callback(1, total, "AI 분석 중", None)
 
-        re_holdings = {t: holdings[t]     for t in reanalyze_tickers}
-        re_data     = {t: data_map[t]     for t in reanalyze_tickers}
-        re_analyst  = {t: analyst_ctx.get(t, {}) for t in reanalyze_tickers}
+        re_holdings = {t: holdings[t]     for t in all_reanalyze}
+        re_data     = {t: data_map[t]     for t in all_reanalyze}
+        re_analyst  = {t: analyst_ctx.get(t, {}) for t in all_reanalyze}
 
         try:
             batch_result = _gemini_batch(re_holdings, re_data, re_analyst, api_key)
@@ -792,7 +801,7 @@ def analyze_portfolio_signals(
         except Exception:
             if progress_callback:
                 progress_callback(1, total, "배치 실패, 순차 분석 중...", None)
-            for i, t in enumerate(reanalyze_tickers):
+            for i, t in enumerate(all_reanalyze):
                 articles, change_pct = re_data.get(t, ([], None))
                 try:
                     signal_map[t] = _gemini_single(
@@ -801,7 +810,7 @@ def analyze_portfolio_signals(
                 except Exception as e2:
                     signal_map[t] = {"_error": str(e2)}
                 if progress_callback:
-                    progress_callback(i + 1, len(reanalyze_tickers), t, None)
+                    progress_callback(i + 1, len(all_reanalyze), t, None)
 
     # ── 5단계: 결과 조합 ─────────────────────────────────────────
     results = []
