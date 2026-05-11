@@ -464,20 +464,30 @@ def render(portfolio: Portfolio):
         names_map = st.session_state["ticker_names"]
         df_hold.insert(1, "종목명", df_hold["티커"].map(names_map))
 
+    # data_editor key를 현재 티커 목록 기반으로 동적 생성
+    # → 종목 추가/삭제 후 rerun 시 이전 session_state와 행 수 불일치 충돌 방지
+    import hashlib as _hashlib
+    _ticker_hash = _hashlib.md5(",".join(sorted(holdings.keys())).encode()).hexdigest()[:8]
+    _editor_key  = f"hold_editor_{_ticker_hash}"
+
     edited_df = st.data_editor(
         df_hold,
         column_config=hold_col_cfg,
         disabled=[c for c in df_hold.columns if c != "보유 수량"],
         width="stretch",
         hide_index=True,
-        key="hold_editor",
+        key=_editor_key,
     )
 
+    # 변경된 종목을 한 번에 모아 저장 (매 행마다 save+rerun 방지)
+    changed = False
     for _, row in edited_df.iterrows():
         t          = row["티커"]
         new_shares = float(row["보유 수량"])
         if abs(new_shares - holdings.get(t, 0.0)) > 1e-9:
             portfolio.set_holding(t, new_shares)
-            portfolio.save()
-            invalidate_cache("buy_result", "bt_result", "rebal_result", "signal_cache")
-            st.rerun()
+            changed = True
+    if changed:
+        portfolio.save()
+        invalidate_cache("buy_result", "bt_result", "rebal_result", "signal_cache")
+        st.rerun()
