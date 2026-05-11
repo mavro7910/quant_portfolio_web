@@ -2,19 +2,16 @@
 core/strategy.py
 
 [백테스트 신뢰성 개선 내역]
-1.  [FIX] Look-ahead bias: 백테스트에서 현재 시총 대신 발행주수×과거주가로 근사
-2.  [FIX] CAGR → XIRR 교체 — 적립식 수익률 현실화
-3.  [FIX] XIRR: fixed weekly_budget 대신 Invested 증분(실제 집행액) 사용
-4.  [FIX] Invested: (i+1)*budget 고정값 → 실제 집행액 누적으로 교체 (과대계상 방지)
-5.  [FIX] valid 종목만 투자 후 재정규화: 가격 없는 종목 예산이 valid 종목에 재분배
-6.  [FIX] 벤치마크 투자금 = KH 실제 집행액(week_invested)으로 통일 (t=0 기준 정렬)
-7.  [FIX] 워밍업 버퍼: 380일 → 420일로 확대 (휴장일 여유 30일 추가 확보)
-8.  [FIX] bm_prices 슬라이스 후 ffill — 벤치마크 미래 가격 유입 차단
-9.  [FIX] is_bull 판단: MA NaN(데이터 부족) → True(강세장) 안전 처리
-10. [FIX] momentum_score rank NaN → 0 처리
-11. [FIX] vol_inv_rank: 변동성 0/NaN → 최대 변동성으로 패널티 처리
-12. [FIX] FX 매주 독립 확인, 누락 시 fallback
-13. [유지] alloc_krw=0 / cp=0 / NaN 방어, FX fallback 1,450
+1. [FIX] Look-ahead bias: 백테스트에서 현재 시총 대신 발행주수×과거주가로 근사
+2. [FIX] CAGR → XIRR(내부수익률)로 교체 — 적립식 수익률 현실화
+3. [FIX] is_bull 판단 시 MA가 NaN이면 True(강세장)로 안전하게 처리
+4. [FIX] momentum_score rank 결과의 NaN을 0으로 채워 점수 오염 방지
+5. [FIX] vol_inv_rank: 변동성 0/NaN 종목을 최대 변동성으로 패널티 처리
+6. [FIX] 벤치마크 시작 시점을 KH 전략과 동일한 첫 매수일로 통일 (t=0 기준선 정렬)
+7. [FIX] 루프 내 슬라이스 후 ffill: 미래 가격이 과거로 역류하지 않도록
+8. [FIX] sim_start 기준 380일 앞에서 데이터 수집 → 워밍업 버퍼 보장
+9. [FIX] FX 누락 시 fallback을 매주 독립적으로 적용
+10. [유지] alloc_krw=0 / cp=0 / NaN 방어, FX fallback 1,450
 """
 
 from __future__ import annotations
@@ -151,21 +148,9 @@ def calc_xirr_from_backtest(
     weekly_budget: int,
     col: str = "KH_Strategy",
 ) -> float:
-    """
-    XIRR 계산.
-
-    Invested 컬럼의 주간 증분을 실제 투자 현금흐름으로 사용.
-    (투자 불가 주가 있을 경우 fixed weekly_budget 대신 실제 집행액 반영)
-    마지막 날 평가금액을 회수 현금흐름으로 처리.
-    """
-    dates    = list(df_bt.index)
-    invested = df_bt["Invested"].values
-
-    # 주간 실제 투자액 = Invested 증분
-    weekly_invested = np.diff(invested, prepend=0.0)
-
-    cfs = [-float(w) for w in weekly_invested]
-    cfs[-1] += float(df_bt[col].iloc[-1])   # 마지막 날 평가금 회수
+    dates = list(df_bt.index)
+    cfs   = [-float(weekly_budget)] * len(dates)
+    cfs[-1] += float(df_bt[col].iloc[-1])
     return xirr(dates, cfs)
 
 
@@ -398,42 +383,28 @@ def run_backtest(
     sim_start: str | None = None,
 ) -> pd.DataFrame:
     """
-    적립식 주간 매수 백테스트.
+    Parameters
+    ----------
+    sim_start : 실제 매수 시뮬레이션 시작일(그래프 t=0).
+                지정 시 그 전 380일치 데이터를 추가 수집해 워밍업 버퍼 확보.
+                None이면 데이터 내 252번째 거래일부터 자동 시작.
 
-    신뢰성 체크리스트
-    -----------------
-    [1] 미래 데이터 유입 차단
-        - fetch는 close raw(ffill 없음) 반환
-        - 루프 내 prices.iloc[:loc+1].ffill() 슬라이스 후 ffill
-        - 팩터 계산(momentum, vol, MA)은 항상 curr_date 이전 데이터만 사용
-
-    [2] 워밍업 버퍼 보장
-        - sim_start 기준 420 달력일 앞에서 데이터 fetch
-          (420일 ≈ 290 거래일 > 252거래일 워밍업 + 최대 30거래일 휴장 여유)
-        - 실제 워밍업 거래일 수 검증 후 부족 시 명확한 에러
-
-    [3] 실제 집행금액 = Invested (과대계상 방지)
-        - valid 종목(가격 존재·양수)만 투자 대상
-        - 스킵된 종목의 예산을 valid 종목에 재분배 후 재정규화
-        - 실제 집행된 KRW를 누적해 Invested에 정확히 반영
-
-    [4] KH 전략 ↔ 벤치마크 t=0 통일
-        - KH가 실제 투자한 주에만 벤치마크도 동일 금액(week_invested) 투자
-
-    [5] 벤치마크 가격 NaN 처리
-        - bm_p_series도 슬라이스 후 ffill 적용
-        - 가격 누락 주는 매수 스킵, 이전 평가금 유지(ffill)
-
-    [6] FX 매주 독립 확인, 누락 시 fallback
-    [7] 시총 근사: 현재 발행주수 × 해당 시점 주가 (look-ahead 최소화)
+    신뢰성 보장
+    -----------
+    - 루프 내 슬라이스 후 ffill → 미래 가격 역류 차단
+    - KH 전략과 벤치마크 첫 매수일(t=0) 동일
+    - MA NaN → 강세장(True)으로 안전 처리
+    - momentum rank NaN → 0 처리
+    - vol 0/NaN → 최대 변동성으로 패널티
+    - FX 매주 독립 확인, 누락 시 fallback
     """
     benchmark_tickers = benchmark_tickers or list(BENCHMARKS.keys())
     extra = ["QQQ", "USDKRW=X"] + benchmark_tickers
 
-    # ── [2] 워밍업 버퍼: sim_start 기준 420 달력일 앞에서 fetch ──
+    # ── 워밍업 버퍼 확보: sim_start 기준 380일 앞에서 fetch ──────
     if sim_start:
         _sim_ts     = pd.Timestamp(sim_start)
-        fetch_start = (_sim_ts - pd.DateOffset(days=420)).strftime("%Y-%m-%d")
+        fetch_start = (_sim_ts - pd.DateOffset(days=380)).strftime("%Y-%m-%d")
     else:
         fetch_start = start  # None이면 period 사용
 
@@ -444,7 +415,7 @@ def run_backtest(
         end=end,
     )
 
-    # [1] raw close (ffill 미적용) — 루프 내 슬라이스 후 ffill
+    # raw close (ffill 미적용) — 루프 내에서 슬라이스 후 ffill
     prices    = data["prices"]
     qqq       = data.get("QQQ",      pd.Series(dtype=float))
     fx_full   = data.get("USDKRW=X", pd.Series(dtype=float))
@@ -458,24 +429,23 @@ def run_backtest(
     else:
         start_idx = 252
 
-    # [2] 워밍업 거래일 수 검증
+    # 워밍업 252 거래일 확보 검증
     if start_idx < 252:
         raise ValueError(
-            f"워밍업 데이터 부족: {start_idx}거래일 확보 (최소 252일 필요).\n"
-            f"시뮬레이션 시작일({sim_start})을 최소 1년 더 앞으로 설정하거나, "
-            "'2년' 이상의 기간을 선택하세요."
+            f"워밍업 데이터 부족: sim_start 이전 {start_idx}일 확보됨 (최소 252일 필요). "
+            "시작일을 최소 1년 이상 앞으로 설정하세요."
         )
     if len(prices) <= start_idx:
         raise ValueError(
             f"전체 데이터({len(prices)}일)가 시뮬 시작 인덱스({start_idx})보다 적습니다."
         )
 
-    # ── [7] 시총 근사용 발행주수 1회 조회 ────────────────────────
+    # ── 시총 근사용 발행주수 1회 조회 ────────────────────────────
     shares_outstanding: pd.Series | None = None
     if use_market_cap:
         shares_outstanding = fetch_shares_outstanding(tickers)
 
-    # ── 매수 일정: 시뮬 시작일부터 마지막 거래일까지 매주 월요일 ──
+    # ── 매수 일정: 첫 유효일부터 마지막 날까지 매주 월요일 ────────
     rebal_days = pd.date_range(
         start=prices.index[start_idx],
         end=prices.index[-1],
@@ -484,8 +454,6 @@ def run_backtest(
 
     shares_kh = pd.Series(0.0, index=tickers)
     bm_shares = {bm: 0.0 for bm in benchmark_tickers}
-
-    total_invested_krw = 0.0   # [3] 누적 실제 집행액
 
     history     = []
     total_steps = len(rebal_days)
@@ -499,11 +467,16 @@ def run_backtest(
             continue
         curr_date = prices.index[loc]
 
-        # [1] 슬라이스 후 ffill: 미래 가격 유입 차단
+        # [FIX] 슬라이스 후 ffill: 미래 가격이 과거로 유입되지 않음
         df_s = prices.iloc[: loc + 1].ffill()
-        cp   = df_s.iloc[-1]
 
-        # [6] FX: 매주 독립 확인, 누락 시 fallback
+        qqq_loc = _get_loc_safe(qqq.index, curr_date) if not qqq.empty else None
+        qqq_s   = qqq.iloc[: qqq_loc + 1].ffill() if qqq_loc is not None else pd.Series(dtype=float)
+
+        cp         = df_s.iloc[-1]
+        valid_mask = cp.notna() & (cp > 0)
+
+        # FX: 매주 독립적으로 확인, 누락 시 fallback
         fx_loc = _get_loc_safe(fx_full.index, curr_date) if not fx_full.empty else None
         if fx_loc is not None:
             fx_val = fx_full.iloc[fx_loc]
@@ -511,11 +484,7 @@ def run_backtest(
         else:
             cfx = FX_FALLBACK
 
-        # [1] QQQ 슬라이스 후 ffill
-        qqq_loc = _get_loc_safe(qqq.index, curr_date) if not qqq.empty else None
-        qqq_s   = qqq.iloc[: qqq_loc + 1].ffill() if qqq_loc is not None else pd.Series(dtype=float)
-
-        # [7] 시총 근사: 발행주수 × 해당 시점 주가
+        # ── 시총 근사: 발행주수 × 해당 시점 주가 ─────────────────
         if use_market_cap and shares_outstanding is not None:
             cp_valid    = cp.reindex(shares_outstanding.index).fillna(0)
             mcap_approx = shares_outstanding * cp_valid
@@ -533,64 +502,42 @@ def run_backtest(
             use_market_cap=use_market_cap,
             mcap_cache=mcap_cache_bt,
         )
+
         if top_n is not None:
             top_t = w_t.nlargest(top_n).index
             w_t   = w_t.loc[top_t]
             w_t   = w_t / w_t.sum()
 
-        # [3] valid 종목(가격 존재·양수)만 투자, 스킵 예산 재분배
-        investable = [
-            t for t in w_t.index
-            if pd.notna(cp.get(t)) and float(cp.get(t, 0)) > 0
-        ]
-        week_invested = 0.0
-        if investable:
-            w_valid   = w_t.loc[investable]
-            w_valid   = w_valid / w_valid.sum()   # 재정규화
-            alloc_krw = w_valid * weekly_budget
-
-            for t in investable:
-                price_usd     = float(cp[t])
-                buy_krw_t     = float(alloc_krw[t])
-                shares_kh[t] += (buy_krw_t / cfx) / price_usd
-                week_invested += buy_krw_t
-
-            total_invested_krw += week_invested
-        # investable이 비어 있으면 이 주는 투자 스킵 (Invested 미증가)
+        alloc_krw = w_t * weekly_budget
+        for t in tickers:
+            if valid_mask.get(t, False) and alloc_krw.get(t, 0) > 0:
+                shares_kh[t] += (alloc_krw[t] / cfx) / float(cp[t])
 
         # ── 포트폴리오 평가금액 ───────────────────────────────────
-        portfolio_value = float((shares_kh * cp.fillna(0)).sum() * cfx)
         row = {
             "Date":        curr_date,
-            "KH_Strategy": portfolio_value,
-            "Invested":    total_invested_krw,   # [3] 실제 집행액 누적
+            "KH_Strategy": (shares_kh * cp.fillna(0) * cfx).sum(),
+            "Invested":    (i + 1) * weekly_budget,
         }
 
-        # [4][5] 벤치마크: KH가 투자한 주에만 동일 금액 투자, 슬라이스 후 ffill
-        for bm, bm_p_raw in bm_prices.items():
-            if bm_p_raw.empty:
+        # ── 벤치마크: KH와 동일 시점·동일 KRW 투자 → t=0 통일 ────
+        for bm, bm_p_series in bm_prices.items():
+            if bm_p_series.empty:
                 row[bm] = np.nan
                 continue
-            bm_loc = _get_loc_safe(bm_p_raw.index, curr_date)
+            bm_loc = _get_loc_safe(bm_p_series.index, curr_date)
             if bm_loc is None:
                 row[bm] = np.nan
                 continue
-            # [5] 벤치마크도 슬라이스 후 ffill
-            cp_bm_s = bm_p_raw.iloc[: bm_loc + 1].ffill()
-            cp_bm   = float(cp_bm_s.iloc[-1]) if not cp_bm_s.empty else np.nan
-
-            if pd.notna(cp_bm) and cp_bm > 0 and week_invested > 0:
-                # [4] KH 실제 집행액과 동일 금액으로 매수
-                bm_shares[bm] += (week_invested / cfx) / cp_bm
-            row[bm] = bm_shares[bm] * cp_bm * cfx if (pd.notna(cp_bm) and cp_bm > 0) else np.nan
+            cp_bm = float(bm_p_series.iloc[bm_loc])
+            if cp_bm > 0:
+                bm_shares[bm] += (weekly_budget / cfx) / cp_bm
+            row[bm] = bm_shares[bm] * cp_bm * cfx
 
         history.append(row)
 
     if not history:
-        raise ValueError("백테스트 결과가 없습니다. 데이터를 확인하세요.")
+        raise ValueError("백테스트 결과가 없습니다.")
 
-    df = pd.DataFrame(history).set_index("Date")
-    # 벤치마크 NaN(가격 누락 주)만 ffill, Invested·KH는 정확한 값이므로 그대로 유지
-    bm_cols = [c for c in df.columns if c not in ("KH_Strategy", "Invested")]
-    df[bm_cols] = df[bm_cols].ffill()
+    df = pd.DataFrame(history).set_index("Date").ffill()
     return df
