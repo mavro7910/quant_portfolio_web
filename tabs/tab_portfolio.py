@@ -364,11 +364,17 @@ def render(portfolio: Portfolio):
                 except Exception as e:
                     st.error(f"시세 조회 실패: {e}")
     with col_auto:
+        # 토글 기본값: session_state → portfolio 설정 순서로 읽음 (새로고침 후에도 유지)
+        _saved_auto = portfolio.get_setting("auto_refresh_prices", False)
         auto_refresh = st.toggle(
             "탭 진입 시 자동 갱신",
-            value=st.session_state.get("auto_refresh_prices", False),
+            value=st.session_state.get("auto_refresh_prices", _saved_auto),
             key="toggle_auto_refresh",
         )
+        # 상태 변경 시 session_state와 portfolio 설정 모두 저장
+        if auto_refresh != st.session_state.get("auto_refresh_prices", _saved_auto):
+            portfolio.set_setting("auto_refresh_prices", auto_refresh)
+            portfolio.save()
         st.session_state["auto_refresh_prices"] = auto_refresh
 
     # 자동 갱신: 포트폴리오에 종목이 있고 캐시가 없을 때만 조회

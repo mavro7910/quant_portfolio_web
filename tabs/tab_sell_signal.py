@@ -25,14 +25,20 @@ def render(portfolio: Portfolio):
 
     col_top, col_mcap6, col_run6 = st.columns([2, 1.5, 1.5])
     with col_top:
-        _max_sell = len(portfolio.tickers()) if portfolio.tickers() else 50
+        _ticker_count = len(portfolio.tickers())
+        # 종목이 없으면 입력 비활성화, 있어도 최소 1개 이상 보장
+        _max_sell = max(_ticker_count, 1) if _ticker_count > 0 else 50
         _saved_sell_n = portfolio.get_setting("sell_top_n", 15)
+        # 저장된 값이 현재 종목 수를 초과하면 max로 클리핑
+        _default_sell_n = max(1, min(_saved_sell_n, _max_sell))
         top_n_sell = st.number_input(
             "유지 기준 순위 (Top N)",
             min_value=1,
             max_value=_max_sell,
-            value=min(_saved_sell_n, _max_sell),
+            value=_default_sell_n,
             step=1,
+            help=f"현재 유니버스 종목 수: {_ticker_count}개. 1 ~ {_max_sell} 사이 값만 입력 가능합니다.",
+            disabled=(_ticker_count == 0),
         )
     with col_mcap6:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)

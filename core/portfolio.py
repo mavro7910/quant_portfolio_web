@@ -58,6 +58,7 @@ _DEFAULTS = {
         "sell_use_mcap": True,
         "rebal_top_n": 15,
         "rebal_use_mcap": True,
+        "auto_refresh_prices": False,
     },
 }
 
