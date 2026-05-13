@@ -14,7 +14,11 @@ core/strategy.py
 10. [FIX] momentum_score rank NaN → 0 처리
 11. [FIX] vol_inv_rank: 변동성 0/NaN → 최대 변동성으로 패널티 처리
 12. [FIX] FX 매주 독립 확인, 누락 시 fallback
-13. [유지] alloc_krw=0 / cp=0 / NaN 방어, FX fallback 1,450
+13. [FIX] target_weights: w_base * alpha_score (곱셈 방식) →
+         가산 블렌딩 방식으로 교체하여 시총/균등 차이가 실제로 반영되도록 수정.
+         (구 방식은 0~1 rank인 alpha_score가 시총 정보를 희석시켜 use_market_cap
+          유무의 차이가 사라지는 버그가 있었음)
+14. [유지] alloc_krw=0 / cp=0 / NaN 방어, FX fallback 1,450
 """
 
 from __future__ import annotations
@@ -251,7 +255,15 @@ def target_weights(
     v_weight = 0.3 if is_bull else 0.6
     alpha_score = (w_mom * m_weight) + (w_vol * v_weight)
 
-    combined = w_base * alpha_score
+    # [FIX] 시총/균등 기본 비중과 알파 점수를 가산 블렌딩 방식으로 결합.
+    # 이전 방식(w_base * alpha_score)은 alpha_score(0~1 rank)가 시총 정보를
+    # 희석시켜 use_market_cap 유무의 차이가 거의 사라지는 버그가 있었음.
+    # 블렌딩 비율: 기본 비중 40%, 알파 점수 60% (강세장) / 50:50 (약세장)
+    alpha_blend = 0.6 if is_bull else 0.5
+
+    alpha_norm = alpha_score / alpha_score.sum() if alpha_score.sum() > 0 else alpha_score
+    combined = (1.0 - alpha_blend) * w_base + alpha_blend * alpha_norm
+
     if combined.sum() == 0:
         return w_base, is_bull
 

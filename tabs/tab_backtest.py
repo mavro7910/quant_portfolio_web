@@ -12,16 +12,12 @@ from core.strategy import run_backtest, calc_xirr_from_backtest, BENCHMARKS
 
 def _calc_sharpe(series: pd.Series, weekly_budget: int, risk_free: float = 0.04) -> float:
     """
-    적립식 수익률 기반 Sharpe Ratio.
-    매주 투자금 대비 증분 수익률의 연환산 Sharpe.
+    주간 수익률 기반 연환산 Sharpe Ratio.
+    포트폴리오 평가금액의 주간 수익률(pct_change)을 사용.
     """
     if len(series) < 4:
         return float("nan")
-    # 주간 포트폴리오 가치 변화율 (투자금 제외한 순수 시장 수익률)
-    invested = pd.Series(range(1, len(series) + 1), index=series.index) * weekly_budget
-    excess   = series - invested                        # 누적 초과 수익 (KRW)
-    weekly_r = excess.diff() / invested.shift(1)        # 주간 초과수익률
-    weekly_r = weekly_r.dropna()
+    weekly_r = series.pct_change().dropna()
     if weekly_r.std() == 0 or len(weekly_r) < 4:
         return float("nan")
     annual_r   = weekly_r.mean() * 52
