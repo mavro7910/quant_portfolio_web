@@ -33,6 +33,41 @@ def safe_get(obj, key, default=0.0):
 def render(portfolio: Portfolio):
     st.markdown('<div class="section-label">투자 설정</div>', unsafe_allow_html=True)
 
+    with st.expander("📐 비중 산출 알고리즘 (클릭하여 펼치기)", expanded=False):
+        st.markdown("""
+<div class="info-banner">
+<b>KH 전략 비중 산출 방식</b><br><br>
+
+<b>① 시장 국면 판단</b><br>
+QQQ 현재가가 200일 이동평균(MA200) 위면 <b>강세장(Bull)</b>, 아래면 <b>약세장(Bear)</b>.<br><br>
+
+<b>② 팩터 점수 계산</b> — 모두 0~1 순위(rank)로 동일 스케일<br>
+· <b>모멘텀</b>: 21일(10%) · 63일(20%) · 126일(30%) · 252일(40%) 수익률 순위 가중합<br>
+· <b>변동성역수</b>: 60일 표준편차 역수 순위 — 덜 출렁일수록 높은 점수<br><br>
+
+<b>③ 코어 알파 — 가중 기하평균(곱)</b><br>
+<code>core = 모멘텀 ^ m_w  ×  변동성역수 ^ v_w</code><br>
+두 팩터 모두 좋아야 높은 점수. 하나라도 낮으면 곱이 작아져 강한 패널티 부여.<br>
+국면에 따라 지수(m_w / v_w)를 조절해 강세·약세 성격을 반영합니다.<br>
+
+<table style="margin:6px 0;font-size:0.85rem">
+<tr><th style="text-align:left;padding-right:16px">국면</th><th>모멘텀(m_w)</th><th>변동성역수(v_w)</th></tr>
+<tr><td>🐂 강세장</td><td>0.7</td><td>0.3</td></tr>
+<tr><td>🐻 약세장</td><td>0.4</td><td>0.6</td></tr>
+</table>
+
+<b>④ 시총 팩터 — 독립 가산(합)</b><br>
+<code>최종비중 = core × (1 - γ)  +  시총rank × γ</code><br>
+시총은 <b>유동성 참고 신호</b>로 소량(γ = 15%) 독립적으로 더합니다.<br>
+· 토글 ON: γ = 15% → 대형주 방향으로 약하게 끌어당김<br>
+· 토글 OFF: γ = 0% → 시총 완전 무시, 순수 팩터 알파만 사용<br>
+시총 조회(yfinance) 실패 시에도 γ = 0 으로 자동 fallback됩니다.<br><br>
+
+<b>⑤ 단일 종목 캡</b><br>
+최종 비중이 <b>25%</b>를 초과하는 종목은 잘라낸 뒤 재정규화합니다.
+</div>
+""", unsafe_allow_html=True)
+
     col_b, col_m, col_run = st.columns([2.5, 2, 1.5])
     with col_b:
         budget = st.number_input(
@@ -42,8 +77,9 @@ def render(portfolio: Portfolio):
     with col_m:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         use_mcap = st.checkbox(
-            "시가총액 가중 사용", value=portfolio.get_setting("buy_use_mcap", True),
-            help="현재 시점 시총 기준으로 비중 조정.",
+            "시가총액 가중 사용 (γ=15%)",
+            value=portfolio.get_setting("buy_use_mcap", True),
+            help="ON: 코어 알파 85% + 시총 rank 15% 합산. OFF: 코어 알파 100% (시총 완전 무시).",
         )
     with col_run:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)

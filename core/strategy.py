@@ -88,22 +88,59 @@ def fetch_market_caps(tickers: list[str]) -> "tuple[pd.Series, bool]":
     """
     현재 시가총액 조회 (매수추천 전용 — 백테스트에서 사용 금지).
 
+    전략:
+    1차) yf.download로 최근 주가 + Ticker.fast_info.shares로 시총 근사
+         → .info 루프 방식보다 rate limit·세션 오류에 강함
+    2차) fast_info도 실패 시 .info['marketCap'] 개별 조회 (fallback)
+
     Returns
     -------
     (Series, ok: bool)
-        ok=False  -> 전체 또는 과반 조회 실패.
-                     시총 가중이 균등 가중과 사실상 동일해지므로
-                     호출부에서 사용자에게 경고 필요.
-        ok=True   -> 과반 이상 정상 조회됨.
+        ok=False → 과반 이상 조회 실패. 호출부에서 경고 표시 필요.
+        ok=True  → 과반 이상 정상 조회됨.
     """
+    # 1차: 최근 종가 일괄 수집
+    try:
+        raw = yf.download(
+            tickers, period="5d",
+            interval="1d", auto_adjust=True, progress=False,
+        )
+        close = extract_close(raw)
+        last_prices = close.ffill().iloc[-1] if not close.empty else pd.Series(dtype=float)
+    except Exception:
+        last_prices = pd.Series(dtype=float)
+
     caps = {}
     for t in tickers:
+        price = float(last_prices[t]) if t in last_prices.index and pd.notna(last_prices.get(t)) else None
+
+        # fast_info 시도 (세션 1회, 가볍고 빠름)
+        shares = None
+        try:
+            fi = yf.Ticker(t).fast_info
+            shares = getattr(fi, "shares", None) or getattr(fi, "shares_outstanding", None)
+            if shares and shares > 0 and price:
+                caps[t] = float(shares) * price
+                continue
+        except Exception:
+            pass
+
+        # fallback: .info['marketCap']
         try:
             info = yf.Ticker(t).info
             mcap = info.get("marketCap")
-            caps[t] = float(mcap) if mcap and mcap > 0 else np.nan
+            if mcap and mcap > 0:
+                caps[t] = float(mcap)
+                continue
+            # .info도 실패 시 shares_outstanding × price로 근사
+            sh = info.get("sharesOutstanding") or info.get("impliedSharesOutstanding")
+            if sh and sh > 0 and price:
+                caps[t] = float(sh) * price
+                continue
         except Exception:
-            caps[t] = np.nan
+            pass
+
+        caps[t] = np.nan
 
     s = pd.Series(caps, dtype=float)
     n_valid = int(s.notna().sum())
@@ -224,21 +261,7 @@ def vol_inv_rank(df: pd.DataFrame, window: int = VOL_WINDOW) -> pd.Series:
     return inv.rank(pct=True)
 
 
-def base_weights(
-    tickers: list[str],
-    df_columns: pd.Index,
-    use_market_cap: bool = False,
-    mcap_cache: pd.Series | None = None,
-) -> pd.Series:
-    if use_market_cap and tickers:
-        if mcap_cache is not None:
-            mcaps = mcap_cache
-        else:
-            mcaps, _ = fetch_market_caps(tickers)  # ok 무시 (호출부에서 이미 확인)
-        w = (mcaps / mcaps.sum()).reindex(df_columns).fillna(0)
-    else:
-        w = pd.Series(1.0 / len(df_columns), index=df_columns)
-    return w
+MCAP_GAMMA = 0.15   # 시총 팩터 반영 강도 (0 = 미반영, 최대 0.30 권장)
 
 
 def target_weights(
@@ -249,39 +272,74 @@ def target_weights(
     max_weight: float = MAX_WEIGHT,
     mcap_cache: pd.Series | None = None,
 ) -> tuple[pd.Series, bool]:
+    """
+    KH 전략 비중 산출.
+
+    알고리즘 설계 철학
+    ------------------
+    팩터를 두 그룹으로 나눠 서로 다른 방식으로 결합합니다.
+
+    [코어 알파 — 가중 기하평균(곱)]
+        core = f_mom ^ m_w  ×  f_vol ^ v_w
+
+        모멘텀과 변동성역수는 "둘 다 좋아야 높은 비중"이라는 논리로 곱합니다.
+        하나라도 낮으면 곱이 작아져 강한 패널티가 부여됩니다.
+        국면에 따라 지수(m_w / v_w)를 조절해 강세장·약세장 성격을 반영합니다.
+          · Bull: m_w=0.7 v_w=0.3 → 모멘텀 주도
+          · Bear: m_w=0.4 v_w=0.6 → 변동성방어 주도
+
+    [시총 팩터 — 독립 가산(합)]
+        w = core_norm × (1 - γ)  +  f_mcap_norm × γ
+
+        시총은 "참고용 유동성 신호"로 소량(γ=15%) 더합니다.
+        use_market_cap=False 이면 γ=0으로 완전히 제거됩니다.
+        시총이 알파와 독립적으로 기여하므로 토글 효과가 직관적입니다.
+        yfinance 실패 시에도 γ=0 fallback으로 안전하게 동작합니다.
+
+    [단일 종목 캡]
+        max_weight(기본 25%) 초과 비중은 잘라낸 뒤 재정규화합니다.
+    """
     tickers = tickers or df.columns.tolist()
 
-    # [FIX] MA NaN(데이터 부족) → True(강세장)로 안전 처리
+    # ── 시장 국면 판단 ────────────────────────────────────────────
     qqq_last = float(qqq.iloc[-1]) if len(qqq) > 0 and pd.notna(qqq.iloc[-1]) else None
     ma_val   = qqq.rolling(MA_WINDOW).mean().iloc[-1] if len(qqq) >= MA_WINDOW else np.nan
 
     if qqq_last is None or pd.isna(ma_val):
-        is_bull = True
+        is_bull = True   # 데이터 부족 → 강세장으로 안전 처리
     else:
         is_bull = qqq_last > float(ma_val)
 
-    w_base = base_weights(tickers, df.columns, use_market_cap, mcap_cache)
+    # ── 팩터 점수 (모두 0~1 rank로 동일 스케일) ──────────────────
+    f_mom = momentum_score(df)   # 높을수록 최근 수익률 좋음
+    f_vol = vol_inv_rank(df)     # 높을수록 변동성 낮음
 
-    p_mom = 2.0 if is_bull else 1.2
-    p_vol = 1.5
-    w_mom = momentum_score(df) ** p_mom
-    w_vol = vol_inv_rank(df)   ** p_vol
+    # ── 국면별 지수: 강세장은 모멘텀 강화, 약세장은 변동성방어 강화 ──
+    m_w = 0.7 if is_bull else 0.4
+    v_w = 0.3 if is_bull else 0.6
 
-    m_weight = 0.7 if is_bull else 0.4
-    v_weight = 0.3 if is_bull else 0.6
-    alpha_score = (w_mom * m_weight) + (w_vol * v_weight)
+    # ── 코어 알파: 가중 기하평균(곱) ────────────────────────────
+    # f_mom^m_w × f_vol^v_w → 둘 다 높아야 높은 점수
+    # 0 방지: rank는 (0, 1] 범위이므로 eps 처리
+    eps = 1e-8
+    core = (f_mom.clip(lower=eps) ** m_w) * (f_vol.clip(lower=eps) ** v_w)
+    if core.sum() == 0:
+        core = pd.Series(1.0, index=df.columns)
+    core_norm = core / core.sum()
 
-    # [FIX] 시총/균등 기본 비중과 알파 점수를 가산 블렌딩 방식으로 결합.
-    # 이전 방식(w_base * alpha_score)은 alpha_score(0~1 rank)가 시총 정보를
-    # 희석시켜 use_market_cap 유무의 차이가 거의 사라지는 버그가 있었음.
-    # 블렌딩 비율: 기본 비중 40%, 알파 점수 60% (강세장) / 50:50 (약세장)
-    alpha_blend = 0.6 if is_bull else 0.5
+    # ── 시총 팩터: rank 정규화 후 독립 가산 ──────────────────────
+    gamma = MCAP_GAMMA if use_market_cap else 0.0
+    if gamma > 0 and mcap_cache is not None:
+        mcap_rank = mcap_cache.rank(pct=True).reindex(df.columns).fillna(0)
+        mcap_norm = mcap_rank / mcap_rank.sum() if mcap_rank.sum() > 0 else mcap_rank
+    else:
+        gamma = 0.0
+        mcap_norm = pd.Series(0.0, index=df.columns)
 
-    alpha_norm = alpha_score / alpha_score.sum() if alpha_score.sum() > 0 else alpha_score
-    combined = (1.0 - alpha_blend) * w_base + alpha_blend * alpha_norm
-
+    # ── 최종 결합: 코어 (1-γ) + 시총 γ ─────────────────────────
+    combined = (1.0 - gamma) * core_norm + gamma * mcap_norm
     if combined.sum() == 0:
-        return w_base, is_bull
+        return pd.Series(1.0 / len(df.columns), index=df.columns), is_bull
 
     w = combined / combined.sum()
     w = w.clip(upper=max_weight)
