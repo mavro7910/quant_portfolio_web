@@ -84,8 +84,18 @@ def fetch_prices(
     return result
 
 
-def fetch_market_caps(tickers: list[str]) -> pd.Series:
-    """현재 시가총액 조회 (매수추천 전용 — 백테스트에서 사용 금지)."""
+def fetch_market_caps(tickers: list[str]) -> "tuple[pd.Series, bool]":
+    """
+    현재 시가총액 조회 (매수추천 전용 — 백테스트에서 사용 금지).
+
+    Returns
+    -------
+    (Series, ok: bool)
+        ok=False  -> 전체 또는 과반 조회 실패.
+                     시총 가중이 균등 가중과 사실상 동일해지므로
+                     호출부에서 사용자에게 경고 필요.
+        ok=True   -> 과반 이상 정상 조회됨.
+    """
     caps = {}
     for t in tickers:
         try:
@@ -96,9 +106,12 @@ def fetch_market_caps(tickers: list[str]) -> pd.Series:
             caps[t] = np.nan
 
     s = pd.Series(caps, dtype=float)
+    n_valid = int(s.notna().sum())
+    ok = n_valid >= max(1, len(tickers) // 2)
+
     min_val = s.dropna().min()
     s = s.fillna(min_val if pd.notna(min_val) and min_val > 0 else 1.0)
-    return s
+    return s, ok
 
 
 def fetch_shares_outstanding(tickers: list[str]) -> pd.Series:
@@ -218,7 +231,10 @@ def base_weights(
     mcap_cache: pd.Series | None = None,
 ) -> pd.Series:
     if use_market_cap and tickers:
-        mcaps = mcap_cache if mcap_cache is not None else fetch_market_caps(tickers)
+        if mcap_cache is not None:
+            mcaps = mcap_cache
+        else:
+            mcaps, _ = fetch_market_caps(tickers)  # ok 무시 (호출부에서 이미 확인)
         w = (mcaps / mcaps.sum()).reindex(df_columns).fillna(0)
     else:
         w = pd.Series(1.0 / len(df_columns), index=df_columns)
@@ -303,7 +319,10 @@ def buy_recommendation(
         fx_rate = float(fx_s.dropna().iloc[-1])
 
     curr_p     = prices_df.iloc[-1]
-    mcap_cache = fetch_market_caps(tickers) if use_market_cap else None
+    mcap_ok    = True
+    mcap_cache = None
+    if use_market_cap:
+        mcap_cache, mcap_ok = fetch_market_caps(tickers)
 
     w_target, is_bull = target_weights(
         prices_df, qqq_s,
@@ -333,6 +352,7 @@ def buy_recommendation(
         "buy_shares":      buy_shares,
         "fx_rate":         fx_rate,
         "fx_estimated":    fx_estimated,
+        "mcap_ok":         mcap_ok,
         "is_bull":         is_bull,
         "prices":          curr_p,
         "total_value_usd": total_usd,
@@ -363,7 +383,10 @@ def rebalance_weights(
         fx_rate = float(fx_s.dropna().iloc[-1])
 
     curr_p     = prices_df.iloc[-1]
-    mcap_cache = fetch_market_caps(tickers) if use_market_cap else None
+    mcap_ok    = True
+    mcap_cache = None
+    if use_market_cap:
+        mcap_cache, mcap_ok = fetch_market_caps(tickers)
 
     w_target, is_bull = target_weights(
         prices_df, qqq_s,
@@ -383,6 +406,7 @@ def rebalance_weights(
         "prices":       curr_p,
         "fx_rate":      fx_rate,
         "fx_estimated": fx_estimated,
+        "mcap_ok":      mcap_ok,
         "is_bull":      is_bull,
     }
 

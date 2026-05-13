@@ -94,12 +94,21 @@ def render(portfolio: Portfolio):
     prices_r   = res["prices"]
     fx         = res["fx_rate"]
     fx_est     = res.get("fx_estimated", False)
+    mcap_ok    = res.get("mcap_ok", True)
     is_bull    = res["is_bull"]
     total_usd  = res["total_value_usd"]
 
     if fx_est:
         st.markdown(
             '<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 -- 추정값 사용</div>',
+            unsafe_allow_html=True,
+        )
+
+    use_mcap_display = portfolio.get_setting("buy_use_mcap", True)
+    if use_mcap_display and not mcap_ok:
+        st.markdown(
+            '<div class="warn-banner">⚠️ 시가총액 데이터 조회 실패 — 이번 결과는 균등 가중으로 계산되었습니다.'
+            ' yfinance 일시 장애일 수 있습니다. 잠시 후 재실행해 주세요.</div>',
             unsafe_allow_html=True,
         )
 
