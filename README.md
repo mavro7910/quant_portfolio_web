@@ -70,24 +70,27 @@ vol_inv_score = rank(1 / std(일간수익률, 60일))
 
 #### 국면별 팩터 배합
 
-| 국면 | 모멘텀 가중 | 변동성역수 가중 | 알파 지수(모멘텀) |
-|------|------------|--------------|----------------|
-| 🐂 Bull | 70% | 30% | 2.0 |
-| 🐻 Bear | 40% | 60% | 1.2 |
+| 국면 | m_w (모멘텀) | v_w (변동성역수) |
+|------|------------|----------------|
+| 🐂 Bull | 0.7 | 0.3 |
+| 🐻 Bear | 0.4 | 0.6 |
 
-#### 기본 비중 + 알파 블렌딩
+#### 알파 산출 — Z-score 가중합 (AQR 방식)
 
 ```
-alpha_score = (momentum × m_weight) + (vol_inv × v_weight)
-alpha_norm  = alpha_score / sum(alpha_score)
+# 팩터 Z-score 정규화 (평균 0, 표준편차 1, ±3σ winsorize)
+z_mom = zscore(각 기간 수익률의 가중합)
+z_vol = zscore(60일 변동성 역수)
 
-w_base      = 시총 가중  또는  균등 가중  (토글 선택)
+# 국면별 가중합
+alpha = z_mom × m_w  +  z_vol × v_w
 
-w_combined  = w_base × 40% + alpha_norm × 60%   # 가산 블렌딩
-w_final     = clip(w_combined, max=25%) → 재정규화
+# ReLU → 정규화 → 25% 캡
+w = clip(alpha, min=0) / sum(clip(alpha, min=0))
+w_final = clip(w, max=25%) → 재정규화
 ```
 
-> **가산 블렌딩 채택 이유**: 이전 곱셈 방식(`w_base × alpha_score`)은 0~1 rank 기반 알파 스코어가 시총 정보를 희석시켜 시총/균등 토글의 차이가 거의 사라지는 버그가 있었습니다. 가산 블렌딩으로 교체 후 두 모드 간 평균 ~2.95%p의 비중 차이가 정상적으로 반영됩니다.
+> **Z-score 채택 이유**: rank 방식은 1등/꼴등 간 실제 격차를 균일 간격으로 압축하지만, Z-score는 종목 간 수익률·변동성의 실제 차이를 그대로 반영합니다. AQR이 수십조 원 규모 팩터 펀드에서 실증 검증한 방식입니다. 음수 alpha 종목은 ReLU로 자연 배제됩니다.
 
 ---
 
@@ -289,6 +292,18 @@ server_metadata_url = "https://accounts.google.com/.well-known/openid-configurat
 ---
 
 ## Changelog
+
+### v2.3.0
+
+- **[REFACTOR]** 팩터 정규화 방식 전면 교체: `rank(pct=True)` → **Z-score ±3σ winsorize**
+  - rank는 종목 간 실제 격차를 균일 간격으로 압축하는 문제가 있었음
+  - Z-score는 실제 수익률·변동성 차이를 그대로 반영 (AQR 실증 방식)
+- **[REFACTOR]** 알파 결합 방식 교체: 가중 기하평균(곱) → **Z-score 가중합**
+  - 음수 alpha 종목은 ReLU(clip≥0)로 자연 배제
+  - 수학적으로 명확하고 AQR 검증 방식과 일치
+- **[REFACTOR]** 시총 팩터(γ=15%) 제거 — 근거 부재 + yfinance 불안정
+  - `use_market_cap` 파라미터는 하위 호환성을 위해 유지 (동작 없음)
+  - 향후 실제 백테스트 검증 후 재도입 예정
 
 ### v2.2.0
 

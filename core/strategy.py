@@ -1,24 +1,24 @@
 """
 core/strategy.py
 
-[백테스트 신뢰성 개선 내역]
-1.  [FIX] Look-ahead bias: 백테스트에서 현재 시총 대신 발행주수×과거주가로 근사
-2.  [FIX] CAGR → XIRR 교체 — 적립식 수익률 현실화
-3.  [FIX] XIRR: fixed weekly_budget 대신 Invested 증분(실제 집행액) 사용
-4.  [FIX] Invested: (i+1)*budget 고정값 → 실제 집행액 누적으로 교체 (과대계상 방지)
-5.  [FIX] valid 종목만 투자 후 재정규화: 가격 없는 종목 예산이 valid 종목에 재분배
-6.  [FIX] 벤치마크 투자금 = KH 실제 집행액(week_invested)으로 통일 (t=0 기준 정렬)
-7.  [FIX] 워밍업 버퍼: 380일 → 420일로 확대 (휴장일 여유 30일 추가 확보)
-8.  [FIX] bm_prices 슬라이스 후 ffill — 벤치마크 미래 가격 유입 차단
-9.  [FIX] is_bull 판단: MA NaN(데이터 부족) → True(강세장) 안전 처리
-10. [FIX] momentum_score rank NaN → 0 처리
-11. [FIX] vol_inv_rank: 변동성 0/NaN → 최대 변동성으로 패널티 처리
-12. [FIX] FX 매주 독립 확인, 누락 시 fallback
-13. [FIX] target_weights: w_base * alpha_score (곱셈 방식) →
-         가산 블렌딩 방식으로 교체하여 시총/균등 차이가 실제로 반영되도록 수정.
-         (구 방식은 0~1 rank인 alpha_score가 시총 정보를 희석시켜 use_market_cap
-          유무의 차이가 사라지는 버그가 있었음)
-14. [유지] alloc_krw=0 / cp=0 / NaN 방어, FX fallback 1,450
+[알고리즘 개선 이력]
+── v3 (현재) ────────────────────────────────────────────────────────
+1.  [REFACTOR] 팩터 정규화: rank(pct=True) → Z-score ±3σ winsorize
+      · rank는 종목 간 격차를 균일 간격으로 압축 (1등/꼴등 차이 무시)
+      · Z-score는 실제 수익률·변동성 격차를 반영 (AQR 실증 방식)
+2.  [REFACTOR] 알파 결합: 가중 기하평균(곱) 제거 → Z-score 가중합으로 통일
+      · Z-score 합산이 AQR 검증 방식이며 수학적으로 명확
+      · 음수 Z-score 종목은 ReLU(clip≥0)로 자연 배제
+3.  [REFACTOR] 시총 팩터 제거 (use_market_cap 파라미터 유지, 동작 없음)
+      · γ=15% 근거 없음 + yfinance 불안정 → 순수 팩터 알파로 단순화
+      · 향후 백테스트 검증 후 재도입 가능
+── v2 ───────────────────────────────────────────────────────────────
+4.  [FIX] Look-ahead bias: 발행주수×과거주가로 시총 근사
+5.  [FIX] CAGR → XIRR (적립식 수익률 현실화)
+6.  [FIX] Invested: 실제 집행액 누적 (과대계상 방지)
+7.  [FIX] 워밍업 버퍼 420 달력일 확보
+8.  [FIX] 벤치마크 미래 가격 유입 차단 (슬라이스 후 ffill)
+9.  [FIX] FX 매주 독립 확인, 누락 시 fallback 1,450
 """
 
 from __future__ import annotations
@@ -224,84 +224,96 @@ def calc_xirr_from_backtest(
 
 
 # ──────────────────────────────────────────────
-# 팩터 계산
+# 팩터 계산 (Z-score 기반, AQR 방식)
 # ──────────────────────────────────────────────
+
+ZSCORE_WINSORIZE = 3.0   # 극단 이상치 제한 (AQR 기준 ±3σ)
+
+
+def _zscore(s: pd.Series, winsorize: float = ZSCORE_WINSORIZE) -> pd.Series:
+    """
+    시리즈를 Z-score 정규화 후 winsorize.
+    표준편차 0(모든 값 동일)이면 영벡터 반환.
+    """
+    sig = float(s.std())
+    if sig < 1e-8:
+        return pd.Series(0.0, index=s.index)
+    z = (s - s.mean()) / sig
+    return z.clip(-winsorize, winsorize)
+
 
 def momentum_score(df: pd.DataFrame) -> pd.Series:
     """
-    복수 룩백 가중 모멘텀 점수 (백분위 기반).
-    [FIX] rank 결과 NaN → 0 처리하여 점수 오염 방지.
+    복수 룩백 가중 모멘텀 Z-score.
+
+    각 기간의 수익률을 독립적으로 Z-score 정규화한 뒤 가중 합산합니다.
+    Z-score를 쓰는 이유: rank는 종목 간 실제 수익률 격차를 균일 간격으로
+    압축하지만, Z-score는 격차를 그대로 반영합니다 (AQR 실증 방식).
+
+    NaN 처리: 기간 데이터 부족 시 해당 기간 건너뜀.
     """
     score   = pd.Series(0.0, index=df.columns)
     total_w = 0.0
     for days, w in MOMENTUM_WEIGHTS.items():
         if len(df) <= days:
             continue
-        ret    = df.pct_change(days).iloc[-1].fillna(0)
-        ranked = ret.rank(pct=True).fillna(0)   # NaN → 0
-        score   += w * ranked
+        ret = df.pct_change(days).iloc[-1].fillna(0)
+        score   += w * _zscore(ret)
         total_w += w
     if total_w > 0:
         score /= total_w
     return score
 
 
-def vol_inv_rank(df: pd.DataFrame, window: int = VOL_WINDOW) -> pd.Series:
+def vol_inv_zscore(df: pd.DataFrame, window: int = VOL_WINDOW) -> pd.Series:
     """
-    변동성 역수 순위 (낮은 변동성 → 높은 점수).
-    [FIX] 변동성 0/NaN → 최대 변동성으로 대체 (가장 낮은 역수 점수 부여).
+    변동성 역수 Z-score (낮은 변동성 → 높은 점수).
+
+    60일 일간 수익률 표준편차의 역수를 Z-score 정규화합니다.
+    NaN/0 변동성 → 최대 변동성으로 대체 (가장 낮은 역수 점수 부여).
     """
-    vol     = df.pct_change().rolling(window).std().iloc[-1]
-    vol     = vol.replace(0, np.nan)
+    vol = df.pct_change().rolling(window).std().iloc[-1]
+    vol = vol.replace(0, np.nan)
     max_vol = vol.dropna().max()
-    vol     = vol.fillna(max_vol if pd.notna(max_vol) and max_vol > 0 else 1.0)
-    inv     = 1.0 / vol
-    if inv.sum() == 0:
-        return pd.Series(1.0 / len(df.columns), index=df.columns)
-    return inv.rank(pct=True)
-
-
-MCAP_GAMMA = 0.15   # 시총 팩터 반영 강도 (0 = 미반영, 최대 0.30 권장)
+    vol = vol.fillna(max_vol if pd.notna(max_vol) and max_vol > 0 else 1.0)
+    return _zscore(1.0 / vol)
 
 
 def target_weights(
     df: pd.DataFrame,
     qqq: pd.Series,
-    use_market_cap: bool = False,
+    use_market_cap: bool = False,   # 현재 미사용 — 향후 백테스트 후 재도입
     tickers: list[str] | None = None,
     max_weight: float = MAX_WEIGHT,
-    mcap_cache: pd.Series | None = None,
+    mcap_cache: pd.Series | None = None,   # 현재 미사용
 ) -> tuple[pd.Series, bool]:
     """
-    KH 전략 비중 산출.
+    KH 전략 비중 산출 (Z-score 가중합 방식).
 
-    알고리즘 설계 철학
-    ------------------
-    팩터를 두 그룹으로 나눠 서로 다른 방식으로 결합합니다.
+    알고리즘
+    --------
+    1. 시장 국면 판단
+       QQQ 현재가 vs MA200 → Bull / Bear
 
-    [코어 알파 — 가중 기하평균(곱)]
-        core = f_mom ^ m_w  ×  f_vol ^ v_w
+    2. 팩터 Z-score 계산
+       · 모멘텀: 21일(10%)·63일(20%)·126일(30%)·252일(40%) 수익률 Z-score 가중합
+       · 변동성역수: 60일 표준편차 역수 Z-score
 
-        모멘텀과 변동성역수는 "둘 다 좋아야 높은 비중"이라는 논리로 곱합니다.
-        하나라도 낮으면 곱이 작아져 강한 패널티가 부여됩니다.
-        국면에 따라 지수(m_w / v_w)를 조절해 강세장·약세장 성격을 반영합니다.
-          · Bull: m_w=0.7 v_w=0.3 → 모멘텀 주도
-          · Bear: m_w=0.4 v_w=0.6 → 변동성방어 주도
+    3. 국면별 가중 합산 (AQR 방식)
+       alpha = 모멘텀_z × m_w  +  변동성역수_z × v_w
+         · Bull: m_w=0.7, v_w=0.3  (모멘텀 주도)
+         · Bear: m_w=0.4, v_w=0.6  (변동성방어 주도)
 
-    [시총 팩터 — 독립 가산(합)]
-        w = core_norm × (1 - γ)  +  f_mcap_norm × γ
+    4. ReLU → 정규화 → 25% 캡
+       음수 alpha 종목은 0으로 clip (자연 배제).
+       이후 합=1 정규화 → 25% 상한 클리핑 → 재정규화.
 
-        시총은 "참고용 유동성 신호"로 소량(γ=15%) 더합니다.
-        use_market_cap=False 이면 γ=0으로 완전히 제거됩니다.
-        시총이 알파와 독립적으로 기여하므로 토글 효과가 직관적입니다.
-        yfinance 실패 시에도 γ=0 fallback으로 안전하게 동작합니다.
-
-    [단일 종목 캡]
-        max_weight(기본 25%) 초과 비중은 잘라낸 뒤 재정규화합니다.
+    use_market_cap 파라미터는 하위 호환성을 위해 유지하나 현재 효과 없음.
+    (γ=15% 근거 부재 + yfinance 불안정으로 v3에서 제거. 백테스트 검증 후 재도입 예정)
     """
     tickers = tickers or df.columns.tolist()
 
-    # ── 시장 국면 판단 ────────────────────────────────────────────
+    # ── 1. 시장 국면 판단 ────────────────────────────────────────
     qqq_last = float(qqq.iloc[-1]) if len(qqq) > 0 and pd.notna(qqq.iloc[-1]) else None
     ma_val   = qqq.rolling(MA_WINDOW).mean().iloc[-1] if len(qqq) >= MA_WINDOW else np.nan
 
@@ -310,38 +322,23 @@ def target_weights(
     else:
         is_bull = qqq_last > float(ma_val)
 
-    # ── 팩터 점수 (모두 0~1 rank로 동일 스케일) ──────────────────
-    f_mom = momentum_score(df)   # 높을수록 최근 수익률 좋음
-    f_vol = vol_inv_rank(df)     # 높을수록 변동성 낮음
+    # ── 2. 팩터 Z-score ─────────────────────────────────────────
+    f_mom = momentum_score(df)       # Z-score, 높을수록 모멘텀 강함
+    f_vol = vol_inv_zscore(df)       # Z-score, 높을수록 변동성 낮음
 
-    # ── 국면별 지수: 강세장은 모멘텀 강화, 약세장은 변동성방어 강화 ──
+    # ── 3. 국면별 가중 합산 ─────────────────────────────────────
     m_w = 0.7 if is_bull else 0.4
     v_w = 0.3 if is_bull else 0.6
+    alpha = f_mom * m_w + f_vol * v_w
 
-    # ── 코어 알파: 가중 기하평균(곱) ────────────────────────────
-    # f_mom^m_w × f_vol^v_w → 둘 다 높아야 높은 점수
-    # 0 방지: rank는 (0, 1] 범위이므로 eps 처리
-    eps = 1e-8
-    core = (f_mom.clip(lower=eps) ** m_w) * (f_vol.clip(lower=eps) ** v_w)
-    if core.sum() == 0:
-        core = pd.Series(1.0, index=df.columns)
-    core_norm = core / core.sum()
-
-    # ── 시총 팩터: rank 정규화 후 독립 가산 ──────────────────────
-    gamma = MCAP_GAMMA if use_market_cap else 0.0
-    if gamma > 0 and mcap_cache is not None:
-        mcap_rank = mcap_cache.rank(pct=True).reindex(df.columns).fillna(0)
-        mcap_norm = mcap_rank / mcap_rank.sum() if mcap_rank.sum() > 0 else mcap_rank
+    # ── 4. ReLU → 정규화 → 캡 ───────────────────────────────────
+    w = alpha.clip(lower=0)          # 음수 종목 자연 배제
+    if w.sum() < 1e-8:
+        # 모든 종목이 음수 (극단적 약세) → 균등 배분 fallback
+        w = pd.Series(1.0 / len(df.columns), index=df.columns)
     else:
-        gamma = 0.0
-        mcap_norm = pd.Series(0.0, index=df.columns)
+        w = w / w.sum()
 
-    # ── 최종 결합: 코어 (1-γ) + 시총 γ ─────────────────────────
-    combined = (1.0 - gamma) * core_norm + gamma * mcap_norm
-    if combined.sum() == 0:
-        return pd.Series(1.0 / len(df.columns), index=df.columns), is_bull
-
-    w = combined / combined.sum()
     w = w.clip(upper=max_weight)
     w = w / w.sum()
 
