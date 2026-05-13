@@ -26,7 +26,23 @@ def render(portfolio: Portfolio):
 
     col_rb1, col_rb2, col_rb3 = st.columns([1.5, 1.5, 1.5])
     with col_rb1:
-        rb_use_mcap = st.checkbox("시가총액 가중 사용", value=portfolio.get_setting("rebal_use_mcap", True), key="rb_mcap")
+        _preset_labels = {
+            "factor":   "순수 팩터 (γ=0%)",
+            "balanced": "균형 (γ=15%)",
+            "mcap":     "시총 편향 (γ=30%)",
+        }
+        _saved_rb_preset = portfolio.get_setting("rebal_mcap_preset", "balanced")
+        _preset_opts = list(_preset_labels.keys())
+        _preset_idx  = _preset_opts.index(_saved_rb_preset) if _saved_rb_preset in _preset_opts else 1
+        rb_mcap_preset = st.radio(
+            "시총 반영",
+            options=_preset_opts,
+            format_func=lambda k: _preset_labels[k],
+            index=_preset_idx,
+            horizontal=False,
+            key="rb_mcap_preset",
+            help="매수 추천 탭과 동일한 프리셋을 사용하세요.",
+        )
     with col_rb2:
         _max_rebal = len(portfolio.tickers())
         _saved_rebal_n = portfolio.get_setting("rebal_top_n", 15)
@@ -43,14 +59,14 @@ def render(portfolio: Portfolio):
         run_rebal = st.button("🔄 리밸런싱 계산 실행", key="btn_rebal")
 
     if run_rebal:
-        portfolio.set_setting("rebal_use_mcap", rb_use_mcap)
+        portfolio.set_setting("rebal_mcap_preset", rb_mcap_preset)
         portfolio.set_setting("rebal_top_n", int(rb_top_n))
         portfolio.save()
         with st.spinner("시세 및 목표 비중 계산 중..."):
             try:
                 res_rb = rebalance_weights(
                     holdings=portfolio.holdings,
-                    use_market_cap=rb_use_mcap,
+                    mcap_preset=rb_mcap_preset,
                     top_n=int(rb_top_n),
                 )
                 st.session_state["rebal_result"] = res_rb

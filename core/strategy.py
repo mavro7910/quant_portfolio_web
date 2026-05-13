@@ -229,6 +229,16 @@ def calc_xirr_from_backtest(
 
 ZSCORE_WINSORIZE = 3.0   # 극단 이상치 제한 (AQR 기준 ±3σ)
 
+# 시총 반영 강도 프리셋
+# 실험 근거: γ에 따른 Sharpe 차이 없음 → 투자 성향 선택의 문제
+# MDD는 γ가 높을수록 소폭 개선 (대형주 낮은 변동성 효과)
+# 집중도는 γ=30%에서 -2.6%p 완화 (소형주 모멘텀 집중 억제)
+MCAP_PRESETS = {
+    "factor":   0.00,   # 순수 팩터: 시총 무시, 모멘텀/변동성만
+    "balanced": 0.15,   # 균형 (기본값): 팩터 85% + 시총 15%
+    "mcap":     0.30,   # 시총 편향: 팩터 70% + 시총 30%
+}
+
 
 def _zscore(s: pd.Series, winsorize: float = ZSCORE_WINSORIZE) -> pd.Series:
     """
@@ -240,6 +250,21 @@ def _zscore(s: pd.Series, winsorize: float = ZSCORE_WINSORIZE) -> pd.Series:
         return pd.Series(0.0, index=s.index)
     z = (s - s.mean()) / sig
     return z.clip(-winsorize, winsorize)
+
+
+def _mcap_zscore(mcap: pd.Series, columns: pd.Index) -> pd.Series:
+    """
+    시총을 raw Z-score로 정규화.
+
+    log 변환을 사용하지 않는 이유:
+    AAPL $3.4T vs MU $0.1T (34배 격차)를 log 처리하면
+    오히려 격차가 더 커지는 역효과가 발생 (실험 확인).
+    raw Z-score가 실제 시총 분포를 더 직관적으로 반영.
+    """
+    mc = mcap.reindex(columns).fillna(0)
+    if mc.sum() < 1e-8:
+        return pd.Series(0.0, index=columns)
+    return _zscore(mc)
 
 
 def momentum_score(df: pd.DataFrame) -> pd.Series:
@@ -282,13 +307,14 @@ def vol_inv_zscore(df: pd.DataFrame, window: int = VOL_WINDOW) -> pd.Series:
 def target_weights(
     df: pd.DataFrame,
     qqq: pd.Series,
-    use_market_cap: bool = False,   # 현재 미사용 — 향후 백테스트 후 재도입
+    use_market_cap: bool = False,
     tickers: list[str] | None = None,
     max_weight: float = MAX_WEIGHT,
-    mcap_cache: pd.Series | None = None,   # 현재 미사용
+    mcap_cache: pd.Series | None = None,
+    mcap_gamma: float | None = None,
 ) -> tuple[pd.Series, bool]:
     """
-    KH 전략 비중 산출 (Z-score 가중합 방식).
+    KH 전략 비중 산출 (Z-score 가중합 + 시총 프리셋).
 
     알고리즘
     --------
@@ -304,12 +330,22 @@ def target_weights(
          · Bull: m_w=0.7, v_w=0.3  (모멘텀 주도)
          · Bear: m_w=0.4, v_w=0.6  (변동성방어 주도)
 
-    4. ReLU → 정규화 → 25% 캡
+    4. 시총 Z-score 혼합 (γ)
+       alpha_final = alpha × (1 - γ)  +  mcap_z × γ
+         · γ=0.00 : 순수 팩터 (시총 무시)
+         · γ=0.15 : 균형  (기본값, MDD 소폭 개선)
+         · γ=0.30 : 시총 편향 (집중도 -2.6%p 완화)
+       mcap_cache 없거나 조회 실패 시 γ=0으로 자동 fallback.
+
+    5. ReLU → 정규화 → 25% 캡
        음수 alpha 종목은 0으로 clip (자연 배제).
        이후 합=1 정규화 → 25% 상한 클리핑 → 재정규화.
 
-    use_market_cap 파라미터는 하위 호환성을 위해 유지하나 현재 효과 없음.
-    (γ=15% 근거 부재 + yfinance 불안정으로 v3에서 제거. 백테스트 검증 후 재도입 예정)
+    Parameters
+    ----------
+    mcap_gamma : 명시 지정 시 MCAP_PRESETS 대신 이 값 사용.
+                 백테스트 루프에서 shares_outstanding × 과거주가로 계산된
+                 mcap_cache를 넘길 때 활용.
     """
     tickers = tickers or df.columns.tolist()
 
@@ -323,18 +359,31 @@ def target_weights(
         is_bull = qqq_last > float(ma_val)
 
     # ── 2. 팩터 Z-score ─────────────────────────────────────────
-    f_mom = momentum_score(df)       # Z-score, 높을수록 모멘텀 강함
-    f_vol = vol_inv_zscore(df)       # Z-score, 높을수록 변동성 낮음
+    f_mom = momentum_score(df)
+    f_vol = vol_inv_zscore(df)
 
     # ── 3. 국면별 가중 합산 ─────────────────────────────────────
     m_w = 0.7 if is_bull else 0.4
     v_w = 0.3 if is_bull else 0.6
     alpha = f_mom * m_w + f_vol * v_w
 
-    # ── 4. ReLU → 정규화 → 캡 ───────────────────────────────────
-    w = alpha.clip(lower=0)          # 음수 종목 자연 배제
+    # ── 4. 시총 Z-score 혼합 ────────────────────────────────────
+    # γ 결정: 명시값 > use_market_cap 프리셋 > 0
+    if mcap_gamma is not None:
+        gamma = float(mcap_gamma)
+    elif use_market_cap:
+        gamma = MCAP_PRESETS["balanced"]   # 기본: 균형(15%)
+    else:
+        gamma = 0.0
+
+    if gamma > 0 and mcap_cache is not None:
+        mcap_z = _mcap_zscore(mcap_cache, df.columns)
+        alpha  = alpha * (1.0 - gamma) + mcap_z * gamma
+    # mcap_cache 없으면 gamma=0 fallback (조회 실패 안전 처리)
+
+    # ── 5. ReLU → 정규화 → 캡 ───────────────────────────────────
+    w = alpha.clip(lower=0)
     if w.sum() < 1e-8:
-        # 모든 종목이 음수 (극단적 약세) → 균등 배분 fallback
         w = pd.Series(1.0 / len(df.columns), index=df.columns)
     else:
         w = w / w.sum()
@@ -352,10 +401,13 @@ def target_weights(
 def buy_recommendation(
     holdings: dict[str, float],
     budget_krw: float,
-    use_market_cap: bool = False,
+    mcap_preset: str = "balanced",
     top_n: int = 10,
     max_weight: float = MAX_WEIGHT,
 ) -> dict:
+    """
+    mcap_preset: "factor"(γ=0) | "balanced"(γ=0.15, 기본) | "mcap"(γ=0.30)
+    """
     tickers = list(holdings.keys())
     data    = fetch_prices(tickers, extra=["QQQ", "USDKRW=X"])
 
@@ -373,18 +425,22 @@ def buy_recommendation(
     else:
         fx_rate = float(fx_s.dropna().iloc[-1])
 
-    curr_p     = prices_df.iloc[-1]
+    curr_p = prices_df.iloc[-1]
+    gamma  = MCAP_PRESETS.get(mcap_preset, MCAP_PRESETS["balanced"])
+
     mcap_ok    = True
     mcap_cache = None
-    if use_market_cap:
+    if gamma > 0:
         mcap_cache, mcap_ok = fetch_market_caps(tickers)
+        if not mcap_ok:
+            gamma = 0.0   # 시총 조회 실패 → fallback to 순수 팩터
 
     w_target, is_bull = target_weights(
         prices_df, qqq_s,
-        use_market_cap=use_market_cap,
         tickers=tickers,
         max_weight=max_weight,
         mcap_cache=mcap_cache,
+        mcap_gamma=gamma,
     )
 
     top_tickers = w_target.nlargest(top_n).index.tolist()
@@ -408,6 +464,8 @@ def buy_recommendation(
         "fx_rate":         fx_rate,
         "fx_estimated":    fx_estimated,
         "mcap_ok":         mcap_ok,
+        "mcap_preset":     mcap_preset,
+        "mcap_gamma":      gamma,
         "is_bull":         is_bull,
         "prices":          curr_p,
         "total_value_usd": total_usd,
@@ -416,7 +474,7 @@ def buy_recommendation(
 
 def rebalance_weights(
     holdings: dict[str, float],
-    use_market_cap: bool = False,
+    mcap_preset: str = "balanced",
     top_n: int | None = None,
     max_weight: float = MAX_WEIGHT,
 ) -> dict:
@@ -437,18 +495,22 @@ def rebalance_weights(
     else:
         fx_rate = float(fx_s.dropna().iloc[-1])
 
-    curr_p     = prices_df.iloc[-1]
+    curr_p = prices_df.iloc[-1]
+    gamma  = MCAP_PRESETS.get(mcap_preset, MCAP_PRESETS["balanced"])
+
     mcap_ok    = True
     mcap_cache = None
-    if use_market_cap:
+    if gamma > 0:
         mcap_cache, mcap_ok = fetch_market_caps(tickers)
+        if not mcap_ok:
+            gamma = 0.0
 
     w_target, is_bull = target_weights(
         prices_df, qqq_s,
-        use_market_cap=use_market_cap,
         tickers=tickers,
         max_weight=max_weight,
         mcap_cache=mcap_cache,
+        mcap_gamma=gamma,
     )
 
     if top_n is not None:
@@ -462,6 +524,8 @@ def rebalance_weights(
         "fx_rate":      fx_rate,
         "fx_estimated": fx_estimated,
         "mcap_ok":      mcap_ok,
+        "mcap_preset":  mcap_preset,
+        "mcap_gamma":   gamma,
         "is_bull":      is_bull,
     }
 
@@ -481,7 +545,7 @@ def run_backtest(
     weekly_budget: int = 100_000,
     benchmark_tickers: list[str] | None = None,
     period: str = "3y",
-    use_market_cap: bool = True,
+    mcap_preset: str = "balanced",
     progress_cb=None,
     top_n: int | None = None,
     start: str | None = None,
@@ -490,6 +554,8 @@ def run_backtest(
 ) -> pd.DataFrame:
     """
     적립식 주간 매수 백테스트.
+
+    mcap_preset : "factor"(γ=0) | "balanced"(γ=0.15, 기본) | "mcap"(γ=0.30)
 
     신뢰성 체크리스트
     -----------------
@@ -562,8 +628,9 @@ def run_backtest(
         )
 
     # ── [7] 시총 근사용 발행주수 1회 조회 ────────────────────────
+    gamma = MCAP_PRESETS.get(mcap_preset, MCAP_PRESETS["balanced"])
     shares_outstanding: pd.Series | None = None
-    if use_market_cap:
+    if gamma > 0:
         shares_outstanding = fetch_shares_outstanding(tickers)
 
     # ── 매수 일정: 시뮬 시작일부터 마지막 거래일까지 매주 월요일 ──
@@ -607,7 +674,8 @@ def run_backtest(
         qqq_s   = qqq.iloc[: qqq_loc + 1].ffill() if qqq_loc is not None else pd.Series(dtype=float)
 
         # [7] 시총 근사: 발행주수 × 해당 시점 주가
-        if use_market_cap and shares_outstanding is not None:
+        mcap_cache_bt = None
+        if gamma > 0 and shares_outstanding is not None:
             cp_valid    = cp.reindex(shares_outstanding.index).fillna(0)
             mcap_approx = shares_outstanding * cp_valid
             min_val     = mcap_approx[mcap_approx > 0].min()
@@ -615,14 +683,12 @@ def run_backtest(
                 min_val if pd.notna(min_val) else 1.0
             )
             mcap_cache_bt = mcap_approx
-        else:
-            mcap_cache_bt = None
 
         # ── KH 전략 비중 계산 ─────────────────────────────────────
         w_t, _ = target_weights(
             df_s, qqq_s,
-            use_market_cap=use_market_cap,
             mcap_cache=mcap_cache_bt,
+            mcap_gamma=gamma,
         )
         if top_n is not None:
             top_t = w_t.nlargest(top_n).index
