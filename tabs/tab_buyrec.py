@@ -118,14 +118,29 @@ def render(portfolio: Portfolio):
         krw = safe_get(buy_krw, t)
         shr = safe_get(buy_shares, t)
         c   = _colors[i % len(_colors)]
+        logo_url = portfolio.get_logo(t)
+        if logo_url:
+            icon_html = (
+                f'<div style="width:32px;height:32px;border-radius:9px;background:#F7F8FA;overflow:hidden;'
+                f'display:flex;align-items:center;justify-content:center">'
+                f'<img src="{logo_url}" alt="{t}" '
+                f'style="width:100%;height:100%;object-fit:contain;padding:5px;border-radius:inherit" '
+                f'onerror="this.remove();this.parentElement.textContent=\'{t[:2]}\';'
+                f'this.parentElement.style.color=\'{c}\'">'
+                f'</div>'
+            )
+        else:
+            icon_html = (
+                f'<div style="width:32px;height:32px;border-radius:9px;background:{c}18;color:{c};'
+                f'display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">{t[:2]}</div>'
+            )
         rows_html += f"""
-<div class="qpm-rec-row" style="display:grid;grid-template-columns:26px 1fr 52px 90px;
+<div class="qpm-rec-row" style="display:grid;grid-template-columns:34px 1fr 52px 90px;
      gap:10px;align-items:center;padding:10px 0;border-bottom:0.5px solid rgba(15,110,86,0.08)">
-  <div style="width:24px;height:24px;border-radius:50%;background:{c}18;color:{c};
-              display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">{i+1}</div>
+  {icon_html}
   <div>
     <div style="font-size:13.5px;font-weight:600;color:{TEXT}">{t}</div>
-    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:1px">{shr:.4f}주</div>
+    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:1px">#{i+1} · {shr:.4f}주</div>
   </div>
   <div style="font-size:13px;font-weight:600;color:{TEAL};text-align:right">{w:.1f}%</div>
   <div class="qpm-rec-amount" style="font-size:12px;color:{TEXT_SUB};text-align:right">₩{krw:,.0f}</div>

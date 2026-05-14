@@ -170,6 +170,13 @@ section[data-testid="stSidebar"] {{ background: #FFFFFF !important; }}
     color: white !important;
     border: 0.5px solid {TEAL} !important;
 }}
+.stButton > button:disabled,
+.stButton > button[disabled] {{
+    background: #F1F3F5 !important;
+    color: #9AA3AA !important;
+    border-color: #E5E8EB !important;
+    opacity: 1 !important;
+}}
 
 /* ── 입력 ── */
 .stTextInput input, .stNumberInput input, .stSelectbox > div > div {{
@@ -209,11 +216,26 @@ section[data-testid="stSidebar"] {{ background: #FFFFFF !important; }}
 [data-testid="stDataFrame"] td {{
     color: {TEXT} !important;
     font-size: 0.82rem !important;
+    opacity: 1 !important;
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: geometricPrecision !important;
 }}
 [data-testid="stDataFrame"] tr:hover td {{
     background: #FBFCFD !important;
 }}
-[data-testid="stDataFrame"] {{ border-radius: 10px !important; overflow: hidden !important; }}
+[data-testid="stDataFrame"] {{
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    opacity: 1 !important;
+    filter: none !important;
+}}
+[data-testid="stDataFrame"] * {{
+    opacity: 1 !important;
+}}
+[aria-disabled="true"],
+[data-disabled="true"] {{
+    opacity: 1 !important;
+}}
 
 /* ── 익스팬더 ── */
 .stExpander {{
@@ -560,6 +582,13 @@ div[data-testid="stCaptionContainer"] {{
     color: #F2FFFB !important;
     border-color: #0F6E56 !important;
 }}
+.stButton > button:disabled,
+.stButton > button[disabled] {{
+    background: #1B211F !important;
+    color: #AAB5B1 !important;
+    border-color: #303936 !important;
+    opacity: 1 !important;
+}}
 .stTextInput input,
 .stNumberInput input,
 .stSelectbox > div > div,
@@ -585,6 +614,11 @@ div[data-testid="stWidgetLabel"] p {{
     background: var(--qpm-bg) !important;
     color: var(--qpm-text) !important;
     border-color: var(--qpm-border) !important;
+    opacity: 1 !important;
+}}
+[aria-disabled="true"],
+[data-disabled="true"] {{
+    opacity: 1 !important;
 }}
 [data-testid="stDataFrame"] tr:hover td {{
     background: var(--qpm-surface) !important;

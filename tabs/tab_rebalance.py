@@ -96,25 +96,65 @@ def render(portfolio: Portfolio):
     total_val_krw = total_val_usd * fx_rb
     regime_text   = "강세장" if is_bull_rb else "약세장"
 
-    c1, c2, c3 = st.columns(3)
-    c1.markdown(
-        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">시장 국면</div>'
-        f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">{regime_text}</div>'
-        f'<div class="sub {"up" if is_bull_rb else "down"}">{"QQQ > MA200" if is_bull_rb else "QQQ < MA200"}</div></div>',
-        unsafe_allow_html=True,
-    )
-    c2.markdown(
-        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">포트폴리오 총액</div>'
-        f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">₩{total_val_krw:,.0f}</div></div>',
-        unsafe_allow_html=True,
-    )
-    c3.markdown(
-        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">USD/KRW</div>'
-        f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">{fx_rb:,.0f}</div>'
-        f'<div class="sub">{"추정값" if fx_est_rb else "실시간"}</div></div>',
-        unsafe_allow_html=True,
-    )
-    st.write("")
+    st.markdown(f"""
+<div class="qpm-rebal-summary">
+  <div class="qpm-rebal-card">
+    <div class="qpm-rebal-label">시장 국면</div>
+    <div class="qpm-rebal-value">{regime_text}</div>
+    <div class="qpm-rebal-sub">{"QQQ > MA200" if is_bull_rb else "QQQ < MA200"}</div>
+  </div>
+  <div class="qpm-rebal-card">
+    <div class="qpm-rebal-label">포트폴리오 총액</div>
+    <div class="qpm-rebal-value">₩{total_val_krw:,.0f}</div>
+  </div>
+  <div class="qpm-rebal-card">
+    <div class="qpm-rebal-label">USD/KRW</div>
+    <div class="qpm-rebal-value">{fx_rb:,.0f}</div>
+    <div class="qpm-rebal-sub">{"추정값" if fx_est_rb else "실시간"}</div>
+  </div>
+</div>
+<style>
+.qpm-rebal-summary {{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 10px 0 22px;
+}}
+.qpm-rebal-card {{
+  background: var(--qpm-surface, #F7F8FA);
+  border: 0;
+  border-radius: 8px;
+  padding: 14px 15px;
+  min-width: 0;
+}}
+.qpm-rebal-label {{
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--qpm-text-muted, #8A949E);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}}
+.qpm-rebal-value {{
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--qpm-text, #111827);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}}
+.qpm-rebal-sub {{
+  margin-top: 5px;
+  font-size: 0.72rem;
+  color: var(--qpm-text-sub, #4B5563);
+}}
+@media (max-width: 768px) {{
+  .qpm-rebal-summary {{
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }}
+}}
+</style>
+""", unsafe_allow_html=True)
 
     # ── 리밸런싱 테이블 ─────────────────────────────────
     rows_rb = []
@@ -231,6 +271,7 @@ def render(portfolio: Portfolio):
   justify-content: center;
   font-size: 10px;
   font-weight: 700;
+  overflow: hidden;
 }}
 .qpm-sell .qpm-trade-icon {{ background: var(--qpm-danger-bg, #FFF2F2); color: var(--qpm-danger, #A32D2D); }}
 .qpm-buy .qpm-trade-icon {{ background: var(--qpm-teal-light, {TEAL_LIGHT}); color: var(--qpm-teal-dark, {TEAL_DARK}); }}
@@ -294,7 +335,7 @@ def render(portfolio: Portfolio):
         rows_html = ""
 
         if df.empty:
-            rows_html = f'<div class="qpm-empty-trade">현재 기준으로 {action}할 종목이 없습니다.</div>'
+            rows_html = f'<div class="qpm-empty-trade">지금은 더 {action}할 종목이 없어요.</div>'
         else:
             sort_col = "조정 금액 (KRW)"
             ordered = df.assign(_abs=df[sort_col].abs()).sort_values("_abs", ascending=False)
@@ -306,9 +347,20 @@ def render(portfolio: Portfolio):
                 amount = abs(float(row["조정 금액 (KRW)"]))
                 shares = abs(float(row["조정 수량"]))
                 ticker = row["티커"]
+                logo_url = portfolio.get_logo(ticker)
+                if logo_url:
+                    icon_html = (
+                        f'<div class="qpm-trade-icon">'
+                        f'<img src="{logo_url}" alt="{ticker}" '
+                        f'style="width:100%;height:100%;object-fit:contain;padding:5px;border-radius:inherit" '
+                        f'onerror="this.remove();this.parentElement.textContent=\'{ticker[:2]}\'">'
+                        f'</div>'
+                    )
+                else:
+                    icon_html = f'<div class="qpm-trade-icon">{ticker[:2]}</div>'
                 rows_html += f"""
 <div class="qpm-trade-card">
-  <div class="qpm-trade-icon">{ticker[:2]}</div>
+  {icon_html}
   <div style="min-width:0">
     <div class="qpm-trade-ticker">{ticker}</div>
     <div class="qpm-trade-meta">현재 {current_w:.1f}% → 목표 {target_w:.1f}%</div>
@@ -327,7 +379,7 @@ def render(portfolio: Portfolio):
 <div class="qpm-trade-panel {tone_cls}">
   <div class="qpm-trade-head">
     <div>
-      <div class="qpm-trade-eyebrow">{action} 대상</div>
+      <div class="qpm-trade-eyebrow">리밸런싱</div>
       <div class="qpm-trade-title">{title}</div>
     </div>
     <div>
@@ -340,8 +392,8 @@ def render(portfolio: Portfolio):
 
     col_sell, col_buy = st.columns(2)
     with col_sell:
-        st.markdown(_trade_panel_html("sell", "줄일 비중", sell_df), unsafe_allow_html=True)
+        st.markdown(_trade_panel_html("sell", "이만큼 더 팔아야 해요", sell_df), unsafe_allow_html=True)
     with col_buy:
-        st.markdown(_trade_panel_html("buy", "늘릴 비중", buy_df), unsafe_allow_html=True)
+        st.markdown(_trade_panel_html("buy", "이만큼 더 사야 해요", buy_df), unsafe_allow_html=True)
 
     st.caption("회색 막대는 현재 비중, 딥 그린 막대는 목표 비중입니다.")

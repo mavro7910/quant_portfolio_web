@@ -206,12 +206,12 @@ def render(portfolio: Portfolio):
         ),
         yaxis=dict(gridcolor="rgba(15,110,86,0.08)", tickfont=dict(color=TICK_COLOR, size=10)),
         legend=dict(
-            orientation="h", yanchor="top", y=-0.14, xanchor="center", x=0.5,
-            bgcolor="rgba(255,255,255,0.85)",
-            bordercolor="rgba(15,110,86,0.15)", borderwidth=0.5,
+            orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1,
+            bgcolor="rgba(0,0,0,0)",
+            bordercolor="rgba(0,0,0,0)", borderwidth=0,
             font=dict(color=FONT_COLOR, size=11),
         ),
-        margin=dict(t=44, b=90, l=60, r=16),
+        margin=dict(t=82, b=48, l=60, r=16),
     ))
     fig.update_layout(lay)
     st.plotly_chart(fig, width="stretch", key="bt_chart")

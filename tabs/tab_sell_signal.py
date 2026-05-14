@@ -189,27 +189,65 @@ def _render_sell_result(portfolio, top_n_sell):
     sell_candidates  = in_top_n[in_top_n == 0].index.tolist()
     watch_candidates = in_top_n[(in_top_n > 0) & (in_top_n < total_days * 0.5)].index.tolist()
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(
-        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">분석 기간</div>'
-        f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">{total_days}일</div></div>', unsafe_allow_html=True,
-    )
-    c2.markdown(
-        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">매도 후보</div>'
-        f'<div style="font-size:1.25rem;font-weight:700;line-height:1.2;"color:#e05252">{len(sell_candidates)}종목</div></div>',
-        unsafe_allow_html=True,
-    )
-    c3.markdown(
-        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">관찰 종목</div>'
-        f'<div style="font-size:1.25rem;font-weight:700;line-height:1.2;"color:#c9873a">{len(watch_candidates)}종목</div></div>',
-        unsafe_allow_html=True,
-    )
-    c4.markdown(
-        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">시총 반영</div>'
-        f'<div style="font-size:1.25rem;font-weight:700;line-height:1.2;"font-size:1.05rem">{_PRESET_LABELS.get(mcap_preset, mcap_preset)}</div></div>',
-        unsafe_allow_html=True,
-    )
-    st.write("")
+    st.markdown(f"""
+<div class="qpm-sell-summary">
+  <div class="qpm-sell-card">
+    <div class="qpm-sell-label">분석 기간</div>
+    <div class="qpm-sell-value">{total_days}일</div>
+  </div>
+  <div class="qpm-sell-card">
+    <div class="qpm-sell-label">매도 후보</div>
+    <div class="qpm-sell-value qpm-sell-danger">{len(sell_candidates)}종목</div>
+  </div>
+  <div class="qpm-sell-card">
+    <div class="qpm-sell-label">관찰 종목</div>
+    <div class="qpm-sell-value qpm-sell-warn">{len(watch_candidates)}종목</div>
+  </div>
+  <div class="qpm-sell-card">
+    <div class="qpm-sell-label">시총 반영</div>
+    <div class="qpm-sell-value qpm-sell-small">{_PRESET_LABELS.get(mcap_preset, mcap_preset)}</div>
+  </div>
+</div>
+<style>
+.qpm-sell-summary {{
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 10px 0 22px;
+}}
+.qpm-sell-card {{
+  background: var(--qpm-surface, #F7F8FA);
+  border: 0;
+  border-radius: 8px;
+  padding: 14px 15px;
+  min-width: 0;
+}}
+.qpm-sell-label {{
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--qpm-text-muted, #8A949E);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}}
+.qpm-sell-value {{
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--qpm-text, #111827);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}}
+.qpm-sell-small {{ font-size: 1.05rem; }}
+.qpm-sell-danger {{ color: #E05252; }}
+.qpm-sell-warn {{ color: #C9873A; }}
+@media (max-width: 768px) {{
+  .qpm-sell-summary {{
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }}
+}}
+</style>
+""", unsafe_allow_html=True)
 
     if sell_candidates:
         st.markdown(
@@ -218,6 +256,7 @@ def _render_sell_result(portfolio, top_n_sell):
             unsafe_allow_html=True,
         )
         sell_rows = [{
+            "로고": portfolio.get_logo(t),
             "티커": t,
             f"Top{top_n_v} 진입 (일)": int(in_top_n[t]),
             "최고 순위": int(best_rank[t]),
@@ -227,7 +266,10 @@ def _render_sell_result(portfolio, top_n_sell):
         } for t in sell_candidates]
         st.dataframe(
             pd.DataFrame(sell_rows).sort_values("최근 순위"),
-            column_config={"보유 수량": st.column_config.NumberColumn(format="%.4f")},
+            column_config={
+                "로고": st.column_config.ImageColumn(""),
+                "보유 수량": st.column_config.NumberColumn(format="%.4f"),
+            },
             hide_index=True, width="stretch",
         )
     else:
@@ -242,6 +284,7 @@ def _render_sell_result(portfolio, top_n_sell):
             unsafe_allow_html=True,
         )
         watch_rows = [{
+            "로고": portfolio.get_logo(t),
             "티커": t,
             f"Top{top_n_v} 진입 (일)": int(in_top_n[t]),
             "진입률 (%)": round(in_top_n[t] / total_days * 100, 1),
@@ -251,22 +294,26 @@ def _render_sell_result(portfolio, top_n_sell):
         } for t in watch_candidates]
         st.dataframe(
             pd.DataFrame(watch_rows).sort_values("진입률 (%)"),
-            column_config={"진입률 (%)": st.column_config.ProgressColumn(min_value=0, max_value=50, format="%.1f%%")},
+            column_config={
+                "로고": st.column_config.ImageColumn(""),
+                "진입률 (%)": st.column_config.ProgressColumn(min_value=0, max_value=50, format="%.1f%%"),
+            },
             hide_index=True, width="stretch",
         )
 
     # ── 히트맵 ──────────────────────────────────────────
     st.markdown(section_title("일별 순위 히트맵 (최근 1달)"), unsafe_allow_html=True)
+    st.caption(f"짙은 녹색에 가까울수록 상위 순위입니다. Top {top_n_v} 밖으로 밀리면 붉은 톤으로 표시됩니다.")
     heatmap_data    = rank_df[tickers_all].T
     date_labels     = [d.strftime("%m/%d") for d in heatmap_data.columns]
     n_tickers_total = len(tickers_all)
     cut = top_n_v / n_tickers_total if n_tickers_total > 0 else 0.5
 
     colorscale = [
-        [0.0,  "#E1F5EE"],
-        [cut,  "#0F6E56"],
-        [cut + 0.01, "#fdecea"],
-        [1.0,  "#e05252"],
+        [0.0,  "#0F6E56"],
+        [max(cut - 0.001, 0.0), "#DDF4ED"],
+        [cut, "#FFF6F2"],
+        [1.0,  "#E05252"],
     ]
 
     fig_hm = go.Figure(go.Heatmap(
@@ -275,25 +322,40 @@ def _render_sell_result(portfolio, top_n_sell):
         y=heatmap_data.index.tolist(),
         colorscale=colorscale,
         zmin=1, zmax=n_tickers_total,
+        xgap=3,
+        ygap=3,
         colorbar=dict(
             title=dict(text="순위", font=dict(size=11, color=FONT_COLOR)),
             tickvals=[1, top_n_v, n_tickers_total],
             ticktext=["1위", f"{top_n_v}위", f"{n_tickers_total}위"],
             tickfont=dict(size=10, color=FONT_COLOR),
-            thickness=10, len=0.7,
+            thickness=8, len=0.62,
+            outlinewidth=0,
         ),
         text=heatmap_data.values,
         texttemplate="%{text}",
-        textfont=dict(size=9, color="white"),
+        textfont=dict(size=9, color="#111827"),
         hovertemplate="날짜: %{x}<br>종목: %{y}<br>순위: %{z}위<extra></extra>",
     ))
     fig_hm.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,0.6)",
+        plot_bgcolor="rgba(0,0,0,0)",
         font_color=FONT_COLOR,
-        margin=dict(t=16, b=40, l=70, r=80),
+        margin=dict(t=12, b=44, l=70, r=70),
         height=max(280, 26 * n_tickers_total + 70),
-        xaxis=dict(side="bottom", tickangle=-45, tickfont=dict(size=9, color=TICK_COLOR)),
-        yaxis=dict(tickfont=dict(size=10, color=TICK_COLOR)),
+        xaxis=dict(
+            side="bottom",
+            tickangle=-35,
+            tickfont=dict(size=9, color=TICK_COLOR),
+            showgrid=False,
+            zeroline=False,
+            showline=False,
+        ),
+        yaxis=dict(
+            tickfont=dict(size=10, color=TICK_COLOR),
+            showgrid=False,
+            zeroline=False,
+            showline=False,
+        ),
     )
     st.plotly_chart(fig_hm, width="stretch", key="sell_heatmap")

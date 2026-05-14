@@ -56,11 +56,11 @@ def base_layout(title: str = "", height: int = 480) -> dict:
         ),
         legend=dict(
             orientation="h",
-            yanchor="top", y=-0.16,
-            xanchor="center", x=0.5,
-            bgcolor=LEGEND_BG,
-            bordercolor="rgba(15,110,86,0.15)",
-            borderwidth=0.5,
+            yanchor="bottom", y=1.04,
+            xanchor="right", x=1,
+            bgcolor="rgba(0,0,0,0)",
+            bordercolor="rgba(0,0,0,0)",
+            borderwidth=0,
             font=dict(color=FONT_COLOR, size=11),
         ),
     )
