@@ -198,6 +198,7 @@ def render(portfolio: Portfolio, file_key: str):
         cached = _get_cached(file_key)
 
     if cached:
+        _render_api_status(cached)
         _render_signal_html(cached)
 
 
@@ -280,6 +281,104 @@ def _run_analysis(portfolio: Portfolio, file_key: str, force_full: bool = False)
     if results:
         _set_cached(file_key, results)
     st.rerun()
+
+
+# ─────────────────────────────────────────────
+# API 상태 패널
+# ─────────────────────────────────────────────
+
+def _render_api_status(signals: list[dict]):
+    """
+    각 종목별 데이터 소스(Finnhub / Marketaux / yfinance) 호출 결과를
+    접을 수 있는 패널로 표시합니다.
+    """
+    if not signals:
+        return
+
+    # 전체 소스 집계
+    source_stats: dict[str, dict[str, int]] = {
+        "finnhub":   {"ok": 0, "no_data": 0, "fail": 0, "skip": 0},
+        "marketaux": {"ok": 0, "no_data": 0, "fail": 0, "skip": 0},
+        "yfinance":  {"ok": 0, "no_data": 0, "fail": 0, "skip": 0},
+    }
+
+    ticker_rows = []
+    for item in signals:
+        status = item.get("api_status") or {}
+        if not status:
+            continue
+        ticker = item.get("ticker", "?")
+        row = {"ticker": ticker}
+        for src in ("finnhub", "marketaux", "yfinance"):
+            s = status.get(src, "skip")
+            row[src] = s
+            source_stats[src][s] = source_stats[src].get(s, 0) + 1
+        ticker_rows.append(row)
+
+    if not ticker_rows:
+        return
+
+    # 요약 배지 생성
+    def _badge(src: str) -> str:
+        ok  = source_stats[src]["ok"]
+        nd  = source_stats[src]["no_data"]
+        fa  = source_stats[src]["fail"]
+        sk  = source_stats[src]["skip"]
+        total_used = ok + nd + fa
+        if sk == len(ticker_rows):
+            return f"⬜ {src.capitalize()} — 미사용"
+        if fa > 0:
+            return f"🔴 {src.capitalize()} — {ok}성공 / {nd}데이터없음 / {fa}실패"
+        if nd > 0 and ok == 0:
+            return f"🟡 {src.capitalize()} — {nd}개 데이터 없음"
+        return f"🟢 {src.capitalize()} — {ok}/{total_used} 성공"
+
+    summary_badges = [_badge(src) for src in ("finnhub", "marketaux", "yfinance")]
+
+    with st.expander("📡 데이터 소스 상태 확인 (클릭하여 펼치기)", expanded=False):
+        # 전체 요약
+        for badge in summary_badges:
+            color = "#4ade80" if badge.startswith("🟢") else \
+                    "#fbbf24" if badge.startswith("🟡") else \
+                    "#94a3b8" if badge.startswith("⬜") else "#f87171"
+            st.markdown(
+                f'<div style="padding:4px 0;font-size:0.85rem;color:{color}">{badge}</div>',
+                unsafe_allow_html=True,
+            )
+
+        st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
+
+        # 티커별 상세 테이블
+        _STATUS_ICON = {
+            "ok":      "✅",
+            "no_data": "⚠️",
+            "fail":    "❌",
+            "skip":    "—",
+            "pending": "⏳",
+        }
+
+        import pandas as pd
+        df_rows = []
+        for row in ticker_rows:
+            df_rows.append({
+                "티커":       row["ticker"],
+                "Finnhub":   _STATUS_ICON.get(row.get("finnhub", "skip"), "—"),
+                "Marketaux": _STATUS_ICON.get(row.get("marketaux", "skip"), "—"),
+                "yfinance":  _STATUS_ICON.get(row.get("yfinance", "skip"), "—"),
+            })
+
+        st.dataframe(
+            pd.DataFrame(df_rows),
+            hide_index=True,
+            use_container_width=True,
+        )
+
+        st.markdown(
+            '<div style="font-size:0.75rem;color:#5c6f99;margin-top:6px">'
+            '✅ 성공 &nbsp;|&nbsp; ⚠️ 데이터 없음 &nbsp;|&nbsp; ❌ 호출 실패 &nbsp;|&nbsp; — 미사용'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
 
 # ─────────────────────────────────────────────

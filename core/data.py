@@ -93,11 +93,40 @@ def fetch_prices_and_fx(
         raise ValueError("티커 목록이 비어 있습니다.")
 
     all_sym = list(dict.fromkeys(tickers + ["USDKRW=X"]))
-    raw = yf.download(all_sym, period=period, auto_adjust=True, progress=False)
+
+    try:
+        raw = yf.download(all_sym, period=period, auto_adjust=True, progress=False)
+    except Exception as e:
+        err_str = str(e)
+        if "403" in err_str or "allowlist" in err_str.lower():
+            raise ValueError(
+                "yfinance 데이터 수집 실패: Yahoo Finance 서버 접근이 차단되었습니다 (403).\n"
+                "배포 환경에서 finance.yahoo.com 도메인 허용 여부를 확인하세요."
+            ) from e
+        raise ValueError(f"yfinance 데이터 수집 오류: {e}") from e
+
     close = extract_close(raw).ffill()
 
     if close.empty:
-        raise ValueError("시세 데이터를 가져오지 못했습니다. 네트워크 상태를 확인하세요.")
+        # 빈 DataFrame이면 yfinance가 데이터를 반환하지 못한 것 — 원인 진단
+        import urllib.request
+        try:
+            urllib.request.urlopen("https://finance.yahoo.com", timeout=3)
+            network_ok = True
+        except Exception:
+            network_ok = False
+
+        if not network_ok:
+            raise ValueError(
+                "yfinance 시세 조회 실패: Yahoo Finance 서버에 접근할 수 없습니다.\n"
+                "• 배포 환경에서 finance.yahoo.com 도메인이 허용되어 있는지 확인하세요.\n"
+                "• Streamlit Cloud / Docker 환경이라면 네트워크 allowlist 설정을 점검하세요."
+            )
+        raise ValueError(
+            "yfinance 시세 데이터가 비어 있습니다. "
+            "네트워크는 연결되었지만 데이터가 없습니다. "
+            "티커 목록을 확인하거나 잠시 후 다시 시도하세요."
+        )
 
     # 환율
     fx_estimated = False

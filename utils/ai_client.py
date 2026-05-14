@@ -474,10 +474,27 @@ def fetch_ticker_data(
     ticker: str,
     finnhub_key: str | None,
     marketaux_key: str | None,
-) -> tuple[list[dict], float | None]:
+) -> tuple[list[dict], float | None, dict]:
+    """
+    뉴스+시세 수집.
+
+    Returns:
+        (articles, change_pct, api_status)
+        api_status: {
+            "finnhub":   "ok" | "skip" | "fail" | "no_data",
+            "marketaux": "ok" | "skip" | "fail" | "no_data",
+            "yfinance":  "ok" | "skip" | "fail" | "no_data",
+        }
+    """
     finnhub_articles:   list[dict] = []
     marketaux_articles: list[dict] = []
     change_pct: float | None = None
+
+    api_status: dict[str, str] = {
+        "finnhub":   "skip" if not finnhub_key   else "pending",
+        "marketaux": "skip" if not marketaux_key else "pending",
+        "yfinance":  "skip",
+    }
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         futures = {}
@@ -490,13 +507,21 @@ def fetch_ticker_data(
             try:
                 if name == "finnhub":
                     finnhub_articles, change_pct = fut.result()
+                    api_status["finnhub"] = "ok" if finnhub_articles or change_pct is not None else "no_data"
                 else:
                     marketaux_articles = fut.result()
+                    api_status["marketaux"] = "ok" if marketaux_articles else "no_data"
             except Exception:
-                pass
+                api_status[name] = "fail"
 
     if not finnhub_articles and not marketaux_articles:
-        return _fetch_yfinance_fallback(ticker)
+        api_status["yfinance"] = "pending"
+        yf_articles, yf_change = _fetch_yfinance_fallback(ticker)
+        if yf_articles or yf_change is not None:
+            api_status["yfinance"] = "ok"
+        else:
+            api_status["yfinance"] = "no_data"
+        return yf_articles, yf_change, api_status
 
     # Marketaux 우선, Finnhub 보완 (제목 중복 제거)
     seen:   set[str]   = set()
@@ -507,7 +532,7 @@ def fetch_ticker_data(
             seen.add(key)
             merged.append(art)
 
-    return merged[:4], change_pct
+    return merged[:4], change_pct, api_status
 
 
 # ─────────────────────────────────────────────
@@ -798,7 +823,9 @@ def analyze_portfolio_signals(
     if progress_callback:
         progress_callback(0, total, "데이터 수집 중", None)
 
-    data_map: dict[str, tuple[list[dict], float | None]] = {}
+    data_map:       dict[str, tuple[list[dict], float | None]] = {}
+    api_status_map: dict[str, dict] = {}
+
     with ThreadPoolExecutor(max_workers=min(10, total)) as executor:
         futures = {
             executor.submit(fetch_ticker_data, t, finnhub_key, marketaux_key): t
@@ -807,9 +834,12 @@ def analyze_portfolio_signals(
         for future in as_completed(futures):
             t = futures[future]
             try:
-                data_map[t] = future.result()
+                articles, change_pct, api_status = future.result()
+                data_map[t]       = (articles, change_pct)
+                api_status_map[t] = api_status
             except Exception:
-                data_map[t] = ([], None)
+                data_map[t]       = ([], None)
+                api_status_map[t] = {"finnhub": "fail", "marketaux": "fail", "yfinance": "fail"}
 
     # ── 2단계: 애널리스트 데이터 수집 ───────────────────────────
     if progress_callback:
@@ -889,6 +919,7 @@ def analyze_portfolio_signals(
                 "analyzed_date": today,
                 "analyzed_time": now_time,
                 "reused_cache":  False,
+                "api_status":    api_status_map.get(ticker, {}),
                 "analyst": {
                     "rec_key":            ana.get("rec_key"),
                     "rec_mean":           ana.get("rec_mean"),
