@@ -233,49 +233,49 @@ def render(portfolio: Portfolio):
     prices_map   = prices_cache[0] if prices_cache else None
     fx_est       = prices_cache[2] if prices_cache else False
 
-    with st.expander("데이터 업데이트", expanded=False):
-        col_btn_ref, col_btn_name, col_auto = st.columns([1, 1, 1])
-        with col_btn_ref:
-            if st.button("시세 갱신", key="btn_refresh", type="primary"):
-                with st.spinner("시세 가져오는 중..."):
-                    try:
-                        prices, fx_new, fx_est_new = fetch_prices_and_fx(portfolio.tickers())
-                        st.session_state["prices_data"] = (prices, fx_new, fx_est_new)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"시세 조회 실패: {e}")
-        with col_btn_name:
-            if st.button("종목명 조회", key="btn_names"):
-                with st.spinner("종목명 가져오는 중..."):
-                    import yfinance as yf, requests
-                    names = {}
-                    fh_key = get_finnhub_key() if has_finnhub_key() else None
-                    for t in portfolio.tickers():
-                        name = None
-                        if fh_key:
-                            try:
-                                r = requests.get("https://finnhub.io/api/v1/stock/profile2",
-                                                 params={"symbol":t}, headers={"X-Finnhub-Token":fh_key}, timeout=5)
-                                profile = r.json()
-                                name = profile.get("name") or None
-                                logo = profile.get("logo") or None
-                                if logo: portfolio.set_logo(t, logo)
-                            except Exception: pass
-                        if not name:
-                            try:
-                                info = yf.Ticker(t).info
-                                name = info.get("longName") or info.get("shortName") or None
-                            except Exception: pass
-                        names[t] = name or t
-                    if fh_key: portfolio.save()
-                    st.session_state["ticker_names"] = names
-        with col_auto:
-            _saved_auto = portfolio.get_setting("auto_refresh_prices", False)
-            auto_refresh = st.toggle("자동 갱신", value=st.session_state.get("auto_refresh_prices", _saved_auto), key="toggle_auto_refresh")
-            if auto_refresh != st.session_state.get("auto_refresh_prices", _saved_auto):
-                portfolio.set_setting("auto_refresh_prices", auto_refresh)
-                portfolio.save()
-            st.session_state["auto_refresh_prices"] = auto_refresh
+    st.markdown('<div class="qpm-update-bar-label">데이터</div>', unsafe_allow_html=True)
+    col_btn_ref, col_btn_name, col_auto = st.columns([1, 1, 1.15], gap="small")
+    with col_btn_ref:
+        if st.button("시세 갱신", key="btn_refresh", type="primary"):
+            with st.spinner("시세 가져오는 중..."):
+                try:
+                    prices, fx_new, fx_est_new = fetch_prices_and_fx(portfolio.tickers())
+                    st.session_state["prices_data"] = (prices, fx_new, fx_est_new)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"시세 조회 실패: {e}")
+    with col_btn_name:
+        if st.button("종목명 조회", key="btn_names"):
+            with st.spinner("종목명 가져오는 중..."):
+                import yfinance as yf, requests
+                names = {}
+                fh_key = get_finnhub_key() if has_finnhub_key() else None
+                for t in portfolio.tickers():
+                    name = None
+                    if fh_key:
+                        try:
+                            r = requests.get("https://finnhub.io/api/v1/stock/profile2",
+                                             params={"symbol":t}, headers={"X-Finnhub-Token":fh_key}, timeout=5)
+                            profile = r.json()
+                            name = profile.get("name") or None
+                            logo = profile.get("logo") or None
+                            if logo: portfolio.set_logo(t, logo)
+                        except Exception: pass
+                    if not name:
+                        try:
+                            info = yf.Ticker(t).info
+                            name = info.get("longName") or info.get("shortName") or None
+                        except Exception: pass
+                    names[t] = name or t
+                if fh_key: portfolio.save()
+                st.session_state["ticker_names"] = names
+    with col_auto:
+        _saved_auto = portfolio.get_setting("auto_refresh_prices", False)
+        auto_refresh = st.toggle("자동 갱신", value=st.session_state.get("auto_refresh_prices", _saved_auto), key="toggle_auto_refresh")
+        if auto_refresh != st.session_state.get("auto_refresh_prices", _saved_auto):
+            portfolio.set_setting("auto_refresh_prices", auto_refresh)
+            portfolio.save()
+        st.session_state["auto_refresh_prices"] = auto_refresh
 
     if auto_refresh and portfolio.tickers() and "prices_data" not in st.session_state:
         with st.spinner("시세 자동 갱신 중..."):
@@ -379,14 +379,14 @@ def render(portfolio: Portfolio):
 """, unsafe_allow_html=True)
 
     if not show_all and remaining > 0:
-        _, col_more, _ = st.columns([1, 1.25, 1])
-        with col_more:
+        left_spacer, center_action, right_spacer = st.columns([1, 1, 1], gap="small")
+        with center_action:
             if st.button(f"{remaining}개 종목 더보기", key="btn_show_all_stocks"):
                 st.session_state["portfolio_show_all"] = True
                 st.rerun()
     elif show_all and len(all_items) > 3:
-        _, col_less, _ = st.columns([1, 1.25, 1])
-        with col_less:
+        left_spacer, center_action, right_spacer = st.columns([1, 1, 1], gap="small")
+        with center_action:
             if st.button("접기", key="btn_hide_stocks"):
                 st.session_state["portfolio_show_all"] = False
                 st.rerun()

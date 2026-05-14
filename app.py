@@ -128,8 +128,8 @@ with _hcol3:
 
 # ── 탭 ───────────────────────────────────────────────────
 tab_port, tab_sig, tab_buy, tab_bt, tab_sell, tab_rebal, tab_cfg = st.tabs([
-    "📋 포트폴리오", "📡 AI 시그널", "🧮 매수 추천",
-    "📈 백테스트",   "🚨 매도 신호",  "⚖️ 리밸런싱", "⚙️ 설정",
+    "포트폴리오", "AI 시그널", "매수 추천",
+    "백테스트", "매도 신호", "리밸런싱", "설정",
 ])
 
 with tab_port:  tab_portfolio.render(portfolio)

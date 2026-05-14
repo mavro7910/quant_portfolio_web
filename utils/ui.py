@@ -105,6 +105,8 @@ GLOBAL_CSS = f"""
 .stApp {{
     background: {BG_GRAD} !important;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
 }}
 [data-testid="stAppViewContainer"] > .main {{ background: transparent !important; }}
 [data-testid="stHeader"] {{ background: transparent !important; }}
@@ -129,10 +131,11 @@ section[data-testid="stSidebar"] {{ background: #FFFFFF !important; }}
 .stTabs [data-baseweb="tab"] {{
     border-radius: 0 !important;
     color: {TEXT_SUB} !important;
-    font-weight: 500 !important;
-    font-size: 0.83rem !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
     padding: 10px 12px !important;
     background: transparent !important;
+    letter-spacing: 0 !important;
 }}
 .stTabs [aria-selected="true"] {{
     background: transparent !important;
@@ -148,11 +151,11 @@ section[data-testid="stSidebar"] {{ background: #FFFFFF !important; }}
     border: 0.5px solid rgba(15,110,86,0.28) !important;
     border-radius: 8px !important;
     font-weight: 600 !important;
-    font-size: 0.83rem !important;
+    font-size: 0.9rem !important;
     transition: all 0.15s !important;
     width: 100% !important;
     letter-spacing: 0 !important;
-    min-height: 38px !important;
+    min-height: 42px !important;
 }}
 .stButton > button:hover {{
     background: #F2FBF7 !important;
@@ -185,6 +188,7 @@ section[data-testid="stSidebar"] {{ background: #FFFFFF !important; }}
     border: 0.5px solid {BORDER} !important;
     border-radius: 8px !important;
     font-size: 0.86rem !important;
+    min-height: 40px !important;
 }}
 .stTextInput input:focus, .stNumberInput input:focus {{
     border-color: {TEAL} !important;
@@ -301,14 +305,14 @@ div[data-testid="column"]:has(.stButton) .stButton {{ margin-bottom:0 !important
     border-radius: 8px;
 }}
 .qpm-logo-title {{
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     color: {TEXT};
     letter-spacing: 0;
 }}
 .qpm-logo-title span {{ color: {TEAL}; }}
 .qpm-logo-subtitle {{
-    font-size: 11px;
+    font-size: 12px;
     color: {TEXT_MUTED};
     margin-top: 1px;
 }}
@@ -320,7 +324,7 @@ div[data-testid="column"]:has(.stButton) .stButton {{ margin-bottom:0 !important
     border-radius: 20px;
     padding: 4px 10px 4px 5px;
     color: {TEXT_SUB};
-    font-size: 11px;
+    font-size: 12px;
     max-width: 260px;
 }}
 .qpm-avatar {{
@@ -339,8 +343,16 @@ div[data-testid="column"]:has(.stButton) .stButton {{ margin-bottom:0 !important
 .qpm-total-section {{
     margin: 18px 0 22px;
 }}
-.qpm-total-label {{
+.qpm-update-bar-label {{
     font-size: 11px;
+    font-weight: 700;
+    color: {TEXT_MUTED};
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin: 4px 0 6px;
+}}
+.qpm-total-label {{
+    font-size: 12px;
     color: {TEXT_SUB};
     margin-bottom: 5px;
 }}
@@ -352,7 +364,7 @@ div[data-testid="column"]:has(.stButton) .stButton {{ margin-bottom:0 !important
     line-height: 1.05;
 }}
 .qpm-total-sub {{
-    font-size: 13px;
+    font-size: 14px;
     color: {TEAL};
     margin-top: 8px;
 }}
@@ -370,7 +382,7 @@ div[data-testid="column"]:has(.stButton) .stButton {{ margin-bottom:0 !important
     min-width: 0;
 }}
 .qpm-metric-label {{
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     color: {TEXT_MUTED};
     text-transform: uppercase;
@@ -378,14 +390,14 @@ div[data-testid="column"]:has(.stButton) .stButton {{ margin-bottom:0 !important
     margin-bottom: 4px;
 }}
 .qpm-metric-value {{
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     color: {TEXT};
     line-height: 1.25;
     overflow-wrap: anywhere;
 }}
 .qpm-metric-sub {{
-    font-size: 10px;
+    font-size: 11px;
     margin-top: 2px;
 }}
 .qpm-stock-list {{
@@ -415,22 +427,22 @@ div[data-testid="column"]:has(.stButton) .stButton {{ margin-bottom:0 !important
     flex-shrink: 0;
 }}
 .qpm-stock-ticker {{
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     color: {TEXT};
 }}
 .qpm-stock-shares {{
-    font-size: 11px;
+    font-size: 12px;
     color: {TEXT_SUB};
     margin-top: 1px;
 }}
 .qpm-stock-price-main {{
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     color: {TEXT};
 }}
 .qpm-stock-value {{
-    font-size: 11px;
+    font-size: 12px;
     color: {TEXT_MUTED};
     margin-top: 1px;
 }}
@@ -477,11 +489,76 @@ header    {{ visibility:hidden; }}
     .qpm-metric-grid {{ grid-template-columns: 1fr 1fr !important; }}
     .qpm-form-row    {{ grid-template-columns: 1fr !important; }}
     .qpm-rec-amount  {{ display:none !important; }}
-    .stTabs [data-baseweb="tab"] {{ padding: 6px 8px !important; font-size:0.76rem !important; }}
+    .stTabs [data-baseweb="tab"] {{
+        padding: 9px 10px !important;
+        font-size: 0.86rem !important;
+        min-width: fit-content !important;
+    }}
+    .stTextInput label, .stNumberInput label, .stSelectbox label,
+    .stRadio label, div[data-testid="stWidgetLabel"] p {{
+        font-size: 0.84rem !important;
+    }}
 }}
 @media (max-width: 480px) {{
     .qpm-metric-grid {{ grid-template-columns: 1fr 1fr !important; }}
-    .qpm-stock-price {{ display:none !important; }}
+    .block-container {{
+        padding-left: 18px !important;
+        padding-right: 18px !important;
+    }}
+    .stTabs [data-baseweb="tab-list"] {{
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        scrollbar-width: none !important;
+    }}
+    .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {{
+        display: none !important;
+    }}
+    .stButton > button {{
+        font-size: 0.93rem !important;
+        min-height: 44px !important;
+    }}
+    .qpm-total-value {{
+        font-size: 2.28rem;
+    }}
+    .qpm-metric-card {{
+        padding: 13px 12px;
+    }}
+    .qpm-metric-label {{
+        font-size: 10.5px;
+    }}
+    .qpm-metric-value {{
+        font-size: 15.5px;
+    }}
+    .qpm-stock-icon {{
+        width: 34px;
+        height: 34px;
+    }}
+    .qpm-stock-ticker {{
+        font-size: 14.5px;
+    }}
+    .qpm-stock-shares {{
+        font-size: 12px;
+    }}
+    .qpm-stock-row {{ gap: 9px; }}
+    .qpm-stock-price {{
+        display:block !important;
+        min-width: 82px;
+        max-width: 108px;
+    }}
+    .qpm-stock-price-main {{
+        font-size: 13px;
+        white-space: nowrap;
+    }}
+    .qpm-stock-value {{
+        font-size: 11.5px;
+        white-space: nowrap;
+    }}
+    .qpm-stock-shares {{
+        max-width: 150px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
     .qpm-app-header {{ align-items:flex-start; flex-direction:column; }}
     .qpm-user-pill {{ max-width:100%; }}
 }}
@@ -540,6 +617,7 @@ section[data-testid="stSidebar"] {{
     color: var(--qpm-teal) !important;
 }}
 .qpm-logo-subtitle,
+.qpm-update-bar-label,
 .qpm-metric-label,
 .qpm-stock-value,
 .qpm-trade-eyebrow,
