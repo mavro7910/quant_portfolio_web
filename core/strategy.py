@@ -203,7 +203,7 @@ def xirr(dates: list, cashflows: list[float]) -> float:
 def calc_xirr_from_backtest(
     df_bt: pd.DataFrame,
     weekly_budget: int,
-    col: str = "KH_Strategy",
+    col: str = "QPM_Alpha",
 ) -> float:
     """
     XIRR 계산.
@@ -314,7 +314,7 @@ def target_weights(
     mcap_gamma: float | None = None,
 ) -> tuple[pd.Series, bool]:
     """
-    KH 전략 비중 산출 (Z-score 가중합 + 시총 프리셋).
+    QPM Alpha 비중 산출 (Z-score 가중합 + 시총 프리셋).
 
     알고리즘
     --------
@@ -574,7 +574,7 @@ def run_backtest(
         - 스킵된 종목의 예산을 valid 종목에 재분배 후 재정규화
         - 실제 집행된 KRW를 누적해 Invested에 정확히 반영
 
-    [4] KH 전략 ↔ 벤치마크 t=0 통일
+    [4] QPM Alpha ↔ 벤치마크 t=0 통일
         - KH가 실제 투자한 주에만 벤치마크도 동일 금액(week_invested) 투자
 
     [5] 벤치마크 가격 NaN 처리
@@ -684,7 +684,7 @@ def run_backtest(
             )
             mcap_cache_bt = mcap_approx
 
-        # ── KH 전략 비중 계산 ─────────────────────────────────────
+        # ── QPM Alpha 비중 계산 ─────────────────────────────────────
         w_t, _ = target_weights(
             df_s, qqq_s,
             mcap_cache=mcap_cache_bt,
@@ -719,7 +719,7 @@ def run_backtest(
         portfolio_value = float((shares_kh * cp.fillna(0)).sum() * cfx)
         row = {
             "Date":        curr_date,
-            "KH_Strategy": portfolio_value,
+            "QPM_Alpha": portfolio_value,
             "Invested":    total_invested_krw,   # [3] 실제 집행액 누적
         }
 
@@ -748,6 +748,6 @@ def run_backtest(
 
     df = pd.DataFrame(history).set_index("Date")
     # 벤치마크 NaN(가격 누락 주)만 ffill, Invested·KH는 정확한 값이므로 그대로 유지
-    bm_cols = [c for c in df.columns if c not in ("KH_Strategy", "Invested")]
+    bm_cols = [c for c in df.columns if c not in ("QPM_Alpha", "Invested")]
     df[bm_cols] = df[bm_cols].ffill()
     return df

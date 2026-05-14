@@ -202,7 +202,7 @@ def render(portfolio: Portfolio):
             )
 
             if uploaded:
-                if st.button("🔍 AI로 종목/수량 추출", key="btn_extract_img", use_container_width=True):
+                if st.button("🔍 AI로 종목/수량 추출", key="btn_extract_img", width="stretch"):
                     try:
                         with st.status("AI 분석 중...", expanded=True) as status:
                             st.write("1단계: 이미지에서 종목명·수량 추출 중...")
@@ -263,7 +263,7 @@ def render(portfolio: Portfolio):
                                                                disabled=True),
                 },
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
                 num_rows="fixed",
                 key="img_preview_editor",
             )
@@ -282,7 +282,7 @@ def render(portfolio: Portfolio):
 
             col_apply, col_cancel = st.columns([3, 1])
             with col_apply:
-                if st.button("✅ 포트폴리오에 반영", key="btn_apply_img", use_container_width=True):
+                if st.button("✅ 포트폴리오에 반영", key="btn_apply_img", width="stretch"):
                     updated = []
                     applied_tickers = set()
 
@@ -312,7 +312,7 @@ def render(portfolio: Portfolio):
                     st.success(msg)
                     st.rerun()
             with col_cancel:
-                if st.button("❌ 취소", key="btn_cancel_img", use_container_width=True):
+                if st.button("❌ 취소", key="btn_cancel_img", width="stretch"):
                     del st.session_state["img_extracted"]
                     st.rerun()
 

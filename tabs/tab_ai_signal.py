@@ -3,7 +3,7 @@ tabs/tab_ai_signal.py
 
 AI 시그널 탭.
 - Gemini API로 보유 종목 뉴스 분석
-- 토스증권 스타일 HTML 컴포넌트로 렌더링 (st.components.v1.html)
+- HTML 컴포넌트로 렌더링 (st.components.v1.html)
 - 하루 단위 session_state 캐시로 API 비용 절약
 """
 
@@ -98,7 +98,7 @@ def render(portfolio: Portfolio, file_key: str):
                     )
             with col_keybtn:
                 st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
-                if st.button("🔑 키 불러오기", key="btn_load_key", use_container_width=True):
+                if st.button("🔑 키 불러오기", key="btn_load_key", width="stretch"):
                     stored2, err2 = load_api_key(file_key)
                     if stored2:
                         set_api_key(stored2)
@@ -167,19 +167,19 @@ def render(portfolio: Portfolio, file_key: str):
         run_signal = st.button(
             "🔄 스마트 재분석" if cached else "🔍 시그널 분석",
             key="btn_run_signal",
-            use_container_width=True,
+            width="stretch",
             help="변동이 큰 종목만 재분석, 나머지는 캐시 사용" if cached else None,
         )
     with col_btn2:
         run_full = st.button(
             "🔃 전체 재분석",
             key="btn_run_full",
-            use_container_width=True,
+            width="stretch",
             disabled=not cached,
             help="모든 종목을 강제로 재분석",
         )
     with col_btn3:
-        if st.button("📂 저장된 결과 불러오기", key="btn_load_cache", use_container_width=True):
+        if st.button("📂 저장된 결과 불러오기", key="btn_load_cache", width="stretch"):
             data, err = load_signal_cache(file_key)
             if data:
                 _set_cached(file_key, data)
@@ -370,7 +370,7 @@ def _render_api_status(signals: list[dict]):
         st.dataframe(
             pd.DataFrame(df_rows),
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )
 
         st.markdown(
@@ -904,4 +904,4 @@ renderList();
 
     n = len(signals)
     height = max(500, n * 100 + 200)
-    components.html(html, height=height, scrolling=True)
+    st.html(html, height=height, scrolling=True)

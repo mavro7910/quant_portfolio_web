@@ -162,7 +162,7 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
 
     col_save, col_del = st.columns([3, 1])
     with col_save:
-        if st.button("✅ 검증 후 저장", key="btn_save_keys", use_container_width=True):
+        if st.button("✅ 검증 후 저장", key="btn_save_keys", width="stretch"):
             errors = []
             saved  = []
 
@@ -213,7 +213,7 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
 
     with col_del:
         if has_api_key() or has_finnhub_key() or has_marketaux_key():
-            if st.button("🗑️ 전체 삭제", key="btn_del_keys", use_container_width=True):
+            if st.button("🗑️ 전체 삭제", key="btn_del_keys", width="stretch"):
                 clear_api_key()
                 clear_finnhub_key()
                 clear_marketaux_key()
