@@ -161,38 +161,187 @@ def render(portfolio: Portfolio):
     sell_df  = df_rb[df_rb["조정 수량"] < -0.0001].copy()
     buy_df   = df_rb[df_rb["조정 수량"] >  0.0001].copy()
 
+    st.markdown(f"""
+<style>
+.qpm-trade-board {{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 8px;
+}}
+.qpm-trade-panel {{
+  background: var(--qpm-bg, #FFFFFF);
+  border: 0;
+  border-radius: 0;
+  min-width: 0;
+}}
+.qpm-trade-head {{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 12px;
+  border-bottom: 0.5px solid var(--qpm-border, {BORDER});
+}}
+.qpm-trade-eyebrow {{
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--qpm-text-muted, {TEXT_MUTED});
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}}
+.qpm-trade-title {{
+  margin-top: 3px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--qpm-text, {TEXT});
+  letter-spacing: 0;
+}}
+.qpm-trade-total {{
+  text-align: right;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--qpm-text, {TEXT});
+  white-space: nowrap;
+}}
+.qpm-trade-sub {{
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--qpm-text-muted, {TEXT_MUTED});
+}}
+.qpm-trade-list {{
+  display: flex;
+  flex-direction: column;
+}}
+.qpm-trade-card {{
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 0;
+  border-bottom: 0.5px solid var(--qpm-border, {BORDER});
+}}
+.qpm-trade-card:last-child {{ border-bottom: 0; }}
+.qpm-trade-icon {{
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}}
+.qpm-sell .qpm-trade-icon {{ background: var(--qpm-danger-bg, #FFF2F2); color: var(--qpm-danger, #A32D2D); }}
+.qpm-buy .qpm-trade-icon {{ background: var(--qpm-teal-light, {TEAL_LIGHT}); color: var(--qpm-teal-dark, {TEAL_DARK}); }}
+.qpm-trade-ticker {{
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--qpm-text, {TEXT});
+}}
+.qpm-trade-meta {{
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--qpm-text-sub, {TEXT_SUB});
+}}
+.qpm-trade-amount {{
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--qpm-text, {TEXT});
+}}
+.qpm-trade-shares {{
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--qpm-text-muted, {TEXT_MUTED});
+}}
+.qpm-weight-bar {{
+  position: relative;
+  height: 5px;
+  margin-top: 8px;
+  border-radius: 99px;
+  background: var(--qpm-bar-bg, #EDF0F2);
+  overflow: hidden;
+}}
+.qpm-weight-current,
+.qpm-weight-target {{
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 99px;
+}}
+.qpm-weight-current {{ background: var(--qpm-bar-current, #D7DDE2); }}
+.qpm-weight-target {{ background: var(--qpm-teal, {TEAL}); opacity: 0.9; }}
+.qpm-empty-trade {{
+  padding: 18px 0;
+  color: var(--qpm-text-sub, {TEXT_SUB});
+  font-size: 13px;
+  border-bottom: 0.5px solid var(--qpm-border, {BORDER});
+}}
+@media (max-width: 768px) {{
+  .qpm-trade-board {{ grid-template-columns: 1fr; }}
+}}
+</style>
+""", unsafe_allow_html=True)
+
+    def _trade_panel_html(kind: str, title: str, df: pd.DataFrame) -> str:
+        is_sell = kind == "sell"
+        action = "매도" if is_sell else "매수"
+        total = abs(float(df["조정 금액 (KRW)"].sum())) if not df.empty else 0.0
+        count = len(df)
+        tone_cls = "qpm-sell" if is_sell else "qpm-buy"
+        rows_html = ""
+
+        if df.empty:
+            rows_html = f'<div class="qpm-empty-trade">현재 기준으로 {action}할 종목이 없습니다.</div>'
+        else:
+            sort_col = "조정 금액 (KRW)"
+            ordered = df.assign(_abs=df[sort_col].abs()).sort_values("_abs", ascending=False)
+            for _, row in ordered.iterrows():
+                current_w = max(float(row["현재 비중 (%)"]), 0.0)
+                target_w = max(float(row["목표 비중 (%)"]), 0.0)
+                current_bar = min(current_w, 100.0)
+                target_bar = min(target_w, 100.0)
+                amount = abs(float(row["조정 금액 (KRW)"]))
+                shares = abs(float(row["조정 수량"]))
+                ticker = row["티커"]
+                rows_html += f"""
+<div class="qpm-trade-card">
+  <div class="qpm-trade-icon">{ticker[:2]}</div>
+  <div style="min-width:0">
+    <div class="qpm-trade-ticker">{ticker}</div>
+    <div class="qpm-trade-meta">현재 {current_w:.1f}% → 목표 {target_w:.1f}%</div>
+    <div class="qpm-weight-bar">
+      <span class="qpm-weight-current" style="width:{current_bar:.1f}%"></span>
+      <span class="qpm-weight-target" style="width:{target_bar:.1f}%"></span>
+    </div>
+  </div>
+  <div>
+    <div class="qpm-trade-amount">₩{amount:,.0f}</div>
+    <div class="qpm-trade-shares">{shares:.4f}주</div>
+  </div>
+</div>"""
+
+        return f"""
+<div class="qpm-trade-panel {tone_cls}">
+  <div class="qpm-trade-head">
+    <div>
+      <div class="qpm-trade-eyebrow">{action} 대상</div>
+      <div class="qpm-trade-title">{title}</div>
+    </div>
+    <div>
+      <div class="qpm-trade-total">₩{total:,.0f}</div>
+      <div class="qpm-trade-sub">{count}개 종목</div>
+    </div>
+  </div>
+  <div class="qpm-trade-list">{rows_html}</div>
+</div>"""
+
     col_sell, col_buy = st.columns(2)
     with col_sell:
-        st.markdown(section_title("📤 매도 대상"), unsafe_allow_html=True)
-        if sell_df.empty:
-            st.markdown(banner("✅ 매도 필요 종목 없음", "success"), unsafe_allow_html=True)
-        else:
-            for _, row in sell_df.iterrows():
-                st.markdown(
-                    f'<div class="warn-banner"><b>{row["티커"]}</b> — {row["조정 수량"]:+.4f}주 매도'
-                    f'<br><span style="font-size:0.78rem">≈ ₩{row["조정 금액 (KRW)"]:,.0f} '
-                    f'(현재 {row["현재 비중 (%)"]:,.1f}% → 목표 {row["목표 비중 (%)"]:,.1f}%)</span></div>',
-                    unsafe_allow_html=True,
-                )
-            st.markdown(
-                f'<div class="warn-banner"><b>총 매도 금액: ₩{sell_df["조정 금액 (KRW)"].sum():,.0f}</b></div>',
-                unsafe_allow_html=True,
-            )
+        st.markdown(_trade_panel_html("sell", "줄일 비중", sell_df), unsafe_allow_html=True)
     with col_buy:
-        st.markdown(section_title("📥 매수 대상"), unsafe_allow_html=True)
-        if buy_df.empty:
-            st.markdown(banner("✅ 매수 필요 종목 없음", "success"), unsafe_allow_html=True)
-        else:
-            for _, row in buy_df.iterrows():
-                st.markdown(
-                    f'<div class="success-banner"><b>{row["티커"]}</b> — {row["조정 수량"]:+.4f}주 매수'
-                    f'<br><span style="font-size:0.78rem">≈ ₩{row["조정 금액 (KRW)"]:,.0f} '
-                    f'(현재 {row["현재 비중 (%)"]:,.1f}% → 목표 {row["목표 비중 (%)"]:,.1f}%)</span></div>',
-                    unsafe_allow_html=True,
-                )
-            st.markdown(
-                f'<div class="success-banner"><b>총 매수 금액: ₩{buy_df["조정 금액 (KRW)"].sum():,.0f}</b></div>',
-                unsafe_allow_html=True,
-            )
+        st.markdown(_trade_panel_html("buy", "늘릴 비중", buy_df), unsafe_allow_html=True)
 
-    st.caption("📌 조정 수량이 양수(+)이면 매수, 음수(-)이면 매도를 의미합니다.")
+    st.caption("회색 막대는 현재 비중, 딥 그린 막대는 목표 비중입니다.")

@@ -85,6 +85,22 @@ def status_pill(text: str, dot_color: str = "#22c55e") -> str:
 
 GLOBAL_CSS = f"""
 <style>
+:root {{
+    --qpm-bg: #FFFFFF;
+    --qpm-surface: {SURFACE};
+    --qpm-surface-2: {SURFACE_DIM};
+    --qpm-border: {BORDER};
+    --qpm-text: {TEXT};
+    --qpm-text-sub: {TEXT_SUB};
+    --qpm-text-muted: {TEXT_MUTED};
+    --qpm-teal: {TEAL};
+    --qpm-teal-dark: {TEAL_DARK};
+    --qpm-teal-light: {TEAL_LIGHT};
+    --qpm-danger-bg: #FFF2F2;
+    --qpm-danger: #A32D2D;
+    --qpm-bar-bg: #EDF0F2;
+    --qpm-bar-current: #D7DDE2;
+}}
 /* ── 기본 ── */
 .stApp {{
     background: {BG_GRAD} !important;
@@ -450,7 +466,148 @@ header    {{ visibility:hidden; }}
 </style>
 """
 
+DARK_CSS = f"""
+<style>
+:root {{
+    --qpm-bg: #101413;
+    --qpm-surface: #181D1B;
+    --qpm-surface-2: #202623;
+    --qpm-border: #29312E;
+    --qpm-text: #F2F5F4;
+    --qpm-text-sub: #B9C3BF;
+    --qpm-text-muted: #7F8B87;
+    --qpm-teal: #7DDFC4;
+    --qpm-teal-dark: #B5F3E2;
+    --qpm-teal-light: #14362D;
+    --qpm-danger-bg: #341C1D;
+    --qpm-danger: #F28B8B;
+    --qpm-bar-bg: #27302D;
+    --qpm-bar-current: #46504C;
+}}
+.stApp,
+[data-testid="stAppViewContainer"],
+section[data-testid="stSidebar"] {{
+    background: var(--qpm-bg) !important;
+    color: var(--qpm-text) !important;
+}}
+[data-testid="stHeader"] {{
+    background: transparent !important;
+}}
+.qpm-app-header,
+.stTabs [data-baseweb="tab-list"],
+.qpm-stock-list,
+.qpm-trade-panel {{
+    background: var(--qpm-bg) !important;
+    border-color: var(--qpm-border) !important;
+}}
+.qpm-logo-title,
+.qpm-total-value,
+.qpm-metric-value,
+.qpm-stock-ticker,
+.qpm-stock-price-main,
+.qpm-trade-title,
+.qpm-trade-total,
+.qpm-trade-ticker,
+[data-testid="stMarkdownContainer"] p,
+.stRadio [data-testid="stMarkdownContainer"] p {{
+    color: var(--qpm-text) !important;
+}}
+.qpm-logo-title span,
+.qpm-total-sub,
+.stTabs [aria-selected="true"] {{
+    color: var(--qpm-teal) !important;
+}}
+.qpm-logo-subtitle,
+.qpm-metric-label,
+.qpm-stock-value,
+.qpm-trade-eyebrow,
+.qpm-trade-sub,
+.qpm-trade-shares,
+.stCaption,
+div[data-testid="stCaptionContainer"] {{
+    color: var(--qpm-text-muted) !important;
+}}
+.qpm-user-pill,
+.qpm-metric-card,
+.qpm-footer-status {{
+    background: var(--qpm-surface) !important;
+    color: var(--qpm-text-sub) !important;
+}}
+.qpm-avatar,
+.qpm-buy .qpm-trade-icon {{
+    background: var(--qpm-teal-light) !important;
+    color: var(--qpm-teal-dark) !important;
+}}
+.qpm-stock-row,
+.qpm-trade-head,
+.qpm-trade-card,
+.qpm-empty-trade,
+.qpm-footer-status {{
+    border-color: var(--qpm-border) !important;
+}}
+.stButton > button {{
+    background: var(--qpm-bg) !important;
+    color: var(--qpm-teal) !important;
+    border-color: #365E55 !important;
+}}
+.stButton > button:hover {{
+    background: var(--qpm-surface-2) !important;
+    border-color: var(--qpm-teal) !important;
+}}
+.stButton > button[kind="primary"],
+.stDownloadButton > button {{
+    background: #0F6E56 !important;
+    color: #F2FFFB !important;
+    border-color: #0F6E56 !important;
+}}
+.stTextInput input,
+.stNumberInput input,
+.stSelectbox > div > div,
+[data-testid="stFileUploader"],
+.stExpander {{
+    background: var(--qpm-surface) !important;
+    color: var(--qpm-text) !important;
+    border-color: var(--qpm-border) !important;
+}}
+.stTextInput label,
+.stNumberInput label,
+.stSelectbox label,
+.stRadio label,
+div[data-testid="stWidgetLabel"] p {{
+    color: var(--qpm-text-sub) !important;
+}}
+[data-testid="stDataFrame"] th {{
+    background: var(--qpm-surface-2) !important;
+    color: var(--qpm-teal) !important;
+    border-color: var(--qpm-border) !important;
+}}
+[data-testid="stDataFrame"] td {{
+    background: var(--qpm-bg) !important;
+    color: var(--qpm-text) !important;
+    border-color: var(--qpm-border) !important;
+}}
+[data-testid="stDataFrame"] tr:hover td {{
+    background: var(--qpm-surface) !important;
+}}
+.qpm-sell .qpm-trade-icon {{
+    background: var(--qpm-danger-bg) !important;
+    color: var(--qpm-danger) !important;
+}}
+.qpm-weight-bar {{
+    background: var(--qpm-bar-bg) !important;
+}}
+.qpm-weight-current {{
+    background: var(--qpm-bar-current) !important;
+}}
+.qpm-weight-target {{
+    background: #7DDFC4 !important;
+}}
+</style>
+"""
+
 
 def inject_all():
     import streamlit as st
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+    if st.session_state.get("qpm_dark_mode", False):
+        st.markdown(DARK_CSS, unsafe_allow_html=True)

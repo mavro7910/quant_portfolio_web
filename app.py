@@ -25,6 +25,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+st.session_state.setdefault("qpm_dark_mode", False)
 inject_all()
 
 
@@ -117,9 +118,11 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# 로그아웃 버튼 — 헤더 우측에 붙이기 위해 absolute 불가 → 별도 컬럼
-_hcol1, _hcol2 = st.columns([8, 1])
+# 로그아웃/테마 토글 — 헤더 아래에 작게 배치
+_hcol1, _hcol2, _hcol3 = st.columns([6, 1.35, 1])
 with _hcol2:
+    st.toggle("다크 모드", key="qpm_dark_mode")
+with _hcol3:
     if st.button("로그아웃", key="btn_logout"):
         st.logout()
 

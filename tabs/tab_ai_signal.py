@@ -390,6 +390,23 @@ def _render_signal_html(signals: list[dict]):
     """라이트 파스텔 테마 시그널 카드 UI."""
 
     signals_json = json.dumps(signals, ensure_ascii=False)
+    dark_mode = st.session_state.get("qpm_dark_mode", False)
+    pal = {
+        "bg": "#101413" if dark_mode else "#FFFFFF",
+        "surface": "#181D1B" if dark_mode else "#FFFFFF",
+        "surface2": "#202623" if dark_mode else "#F7F8FA",
+        "border": "#29312E" if dark_mode else "#EDF0F2",
+        "border2": "#232B28" if dark_mode else "#F1F3F5",
+        "text": "#F2F5F4" if dark_mode else "#111827",
+        "text_sub": "#B9C3BF" if dark_mode else "#4B5563",
+        "text_muted": "#7F8B87" if dark_mode else "#8A949E",
+        "teal": "#7DDFC4" if dark_mode else "#0F6E56",
+        "teal_dark": "#B5F3E2" if dark_mode else "#085041",
+        "teal_light": "#14362D" if dark_mode else "#E1F5EE",
+        "gold_light": "#322B18" if dark_mode else "#fdf4e0",
+        "danger_bg": "#341C1D" if dark_mode else "#fdeaea",
+        "empty_bg": "#1C2421" if dark_mode else "rgba(15,110,86,0.06)",
+    }
 
     html = f"""
 <!DOCTYPE html>
@@ -400,21 +417,21 @@ def _render_signal_html(signals: list[dict]):
 <style>
   * {{ margin:0; padding:0; box-sizing:border-box; }}
   :root {{
-    --bg:          #f4fbfa;
-    --surface:     rgba(255,255,255,0.95);
-    --surface2:    rgba(240,250,248,0.8);
-    --border:      rgba(15,110,86,0.14);
-    --border2:     rgba(15,110,86,0.08);
-    --text:        #1a2a28;
-    --text-sub:    #4a8a84;
-    --text-muted:  #8A949E;
-    --teal:        #0F6E56;
-    --teal-dark:   #085041;
-    --teal-light:  #E1F5EE;
+    --bg:          {pal["bg"]};
+    --surface:     {pal["surface"]};
+    --surface2:    {pal["surface2"]};
+    --border:      {pal["border"]};
+    --border2:     {pal["border2"]};
+    --text:        {pal["text"]};
+    --text-sub:    {pal["text_sub"]};
+    --text-muted:  {pal["text_muted"]};
+    --teal:        {pal["teal"]};
+    --teal-dark:   {pal["teal_dark"]};
+    --teal-light:  {pal["teal_light"]};
     --up:          #e05252;
     --down:        #4a90d9;
     --gold:        #b8922a;
-    --gold-light:  #fdf4e0;
+    --gold-light:  {pal["gold_light"]};
     --green:       #0F6E56;
     --yellow:      #c9873a;
     --red:         #e05252;
@@ -460,7 +477,7 @@ def _render_signal_html(signals: list[dict]):
   }}
   .signal-card.up::before    {{ background: var(--up); }}
   .signal-card.down::before  {{ background: var(--down); }}
-  .signal-card.neutral::before {{ background: var(--border); }}
+  .signal-card.neutral::before {{ background: var(--text-muted); }}
   .signal-card:hover {{ border-color: var(--teal); box-shadow: 0 2px 12px rgba(15,110,86,0.1); transform: translateY(-1px); }}
   .signal-card.open  {{ border-color: var(--teal); border-radius: 14px 14px 0 0; border-bottom-color: transparent; }}
 
@@ -482,8 +499,8 @@ def _render_signal_html(signals: list[dict]):
   }}
   .rec-buy  {{ background: var(--teal-light); color: var(--teal-dark); }}
   .rec-hold {{ background: var(--gold-light);  color: var(--gold); }}
-  .rec-sell {{ background: #fdeaea; color: var(--red); }}
-  .rec-none {{ background: rgba(15,110,86,0.06); color: var(--text-muted); }}
+  .rec-sell {{ background: {pal["danger_bg"]}; color: var(--red); }}
+  .rec-none {{ background: {pal["empty_bg"]}; color: var(--text-muted); }}
 
   .card-row2 {{ display: flex; align-items: center; justify-content: space-between; gap: 6px; }}
   .card-reason {{
@@ -499,7 +516,7 @@ def _render_signal_html(signals: list[dict]):
   .card-chips {{ display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }}
   .chip {{
     font-size: 10px; padding: 2px 8px; border-radius: 6px;
-    background: rgba(15,110,86,0.06); color: var(--text-sub);
+    background: {pal["empty_bg"]}; color: var(--text-sub);
     border: 0.5px solid var(--border);
   }}
   .chip.warn {{ background: rgba(224,82,82,0.07); color: #b04040; border-color: rgba(224,82,82,0.2); }}
@@ -589,8 +606,8 @@ def _render_signal_html(signals: list[dict]):
   .news-snippet {{ font-size: 11px; color: var(--text-muted); line-height: 1.4; }}
   .news-senti  {{ display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-top: 4px; }}
   .senti-pos {{ background: var(--teal-light); color: var(--teal-dark); }}
-  .senti-neg {{ background: #fdeaea; color: var(--red); }}
-  .senti-neu {{ background: rgba(15,110,86,0.06); color: var(--text-muted); }}
+  .senti-neg {{ background: {pal["danger_bg"]}; color: var(--red); }}
+  .senti-neu {{ background: {pal["empty_bg"]}; color: var(--text-muted); }}
 
   .no-signal {{ font-size: 12.5px; color: var(--text-muted); padding: 16px 0; text-align: center; }}
   .empty-state {{ text-align: center; padding: 36px 20px; color: var(--text-muted); }}
@@ -603,7 +620,6 @@ def _render_signal_html(signals: list[dict]):
   <button class="filter-btn active" onclick="setFilter(this,'all')">전체</button>
   <button class="filter-btn" onclick="setFilter(this,'up')">상승</button>
   <button class="filter-btn" onclick="setFilter(this,'down')">하락</button>
-  <button class="filter-btn" onclick="setFilter(this,'neutral')">중립</button>
 </div>
 
 <div class="card-list" id="cardList"></div>
@@ -678,7 +694,6 @@ function render(){{
   let data=[...RAW];
   if(curFilter==="up")      data=data.filter(d=>sigClass(d)==="up");
   if(curFilter==="down")    data=data.filter(d=>sigClass(d)==="down");
-  if(curFilter==="neutral") data=data.filter(d=>sigClass(d)==="neutral");
   if(!data.length){{
     list.innerHTML=`<div class="empty-state"><div class="icon">🔍</div><p>해당하는 시그널이 없어요</p></div>`;
     return;
