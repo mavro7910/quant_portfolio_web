@@ -766,6 +766,22 @@ div[data-testid="stWidgetLabel"] p {{
     border-color: var(--qpm-border) !important;
     opacity: 1 !important;
 }}
+[data-baseweb="tooltip"],
+[role="tooltip"],
+div[data-baseweb="popover"] {{
+    background: #252C29 !important;
+    background-color: #252C29 !important;
+    color: #F2F5F4 !important;
+    border: 0.5px solid #3C4642 !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35) !important;
+}}
+[data-baseweb="tooltip"] *,
+[role="tooltip"] *,
+div[data-baseweb="popover"] * {{
+    color: #F2F5F4 !important;
+    -webkit-text-fill-color: #F2F5F4 !important;
+    opacity: 1 !important;
+}}
 [aria-disabled="true"],
 [data-disabled="true"] {{
     opacity: 1 !important;
