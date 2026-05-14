@@ -6,6 +6,7 @@ import streamlit as st
 
 from core.portfolio import Portfolio
 from core.strategy import rebalance_weights
+from utils.ui import section_title, banner, metric_card, badge, TEAL, TEAL_DARK, TEAL_LIGHT, TEXT, TEXT_SUB, TEXT_MUTED, BORDER, SURFACE
 from utils.plotly_theme import TEAL, FONT_COLOR, TICK_COLOR
 
 _PRESET_LABELS = {
@@ -82,7 +83,7 @@ def render(portfolio: Portfolio):
     all_tickers = portfolio.tickers()
 
     if fx_est_rb:
-        st.markdown('<div class="warn-banner">⚠️ USD/KRW 환율 조회 실패 — 추정값 사용 중</div>', unsafe_allow_html=True)
+        st.markdown(banner("⚠️ USD/KRW 환율 조회 실패 — 추정값 사용 중", "warn"), unsafe_allow_html=True)
 
     holdings_rb   = portfolio.holdings
     total_val_usd = 0.0
@@ -99,19 +100,19 @@ def render(portfolio: Portfolio):
 
     c1, c2, c3 = st.columns(3)
     c1.markdown(
-        f'<div class="metric-card"><div class="label">시장 국면</div>'
-        f'<div class="value">{regime_text}</div>'
+        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">시장 국면</div>'
+        f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">{regime_text}</div>'
         f'<div class="sub {"up" if is_bull_rb else "down"}">{"QQQ > MA200" if is_bull_rb else "QQQ < MA200"}</div></div>',
         unsafe_allow_html=True,
     )
     c2.markdown(
-        f'<div class="metric-card"><div class="label">포트폴리오 총액</div>'
-        f'<div class="value">₩{total_val_krw:,.0f}</div></div>',
+        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">포트폴리오 총액</div>'
+        f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">₩{total_val_krw:,.0f}</div></div>',
         unsafe_allow_html=True,
     )
     c3.markdown(
-        f'<div class="metric-card"><div class="label">USD/KRW</div>'
-        f'<div class="value">{fx_rb:,.0f}</div>'
+        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">USD/KRW</div>'
+        f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">{fx_rb:,.0f}</div>'
         f'<div class="sub">{"추정값" if fx_est_rb else "실시간"}</div></div>',
         unsafe_allow_html=True,
     )
@@ -142,7 +143,7 @@ def render(portfolio: Portfolio):
             "조정 금액 (KRW)": diff_krw,
         })
 
-    st.markdown('<div class="section-label">종목별 리밸런싱 내역</div>', unsafe_allow_html=True)
+    st.markdown(section_title("종목별 리밸런싱 내역"), unsafe_allow_html=True)
     st.dataframe(
         pd.DataFrame(rows_rb),
         column_config={
@@ -164,9 +165,9 @@ def render(portfolio: Portfolio):
 
     col_sell, col_buy = st.columns(2)
     with col_sell:
-        st.markdown('<div class="section-label">📤 매도 대상</div>', unsafe_allow_html=True)
+        st.markdown(section_title("📤 매도 대상"), unsafe_allow_html=True)
         if sell_df.empty:
-            st.markdown('<div class="success-banner">✅ 매도 필요 종목 없음</div>', unsafe_allow_html=True)
+            st.markdown(banner("✅ 매도 필요 종목 없음", "success"), unsafe_allow_html=True)
         else:
             for _, row in sell_df.iterrows():
                 st.markdown(
@@ -180,9 +181,9 @@ def render(portfolio: Portfolio):
                 unsafe_allow_html=True,
             )
     with col_buy:
-        st.markdown('<div class="section-label">📥 매수 대상</div>', unsafe_allow_html=True)
+        st.markdown(section_title("📥 매수 대상"), unsafe_allow_html=True)
         if buy_df.empty:
-            st.markdown('<div class="success-banner">✅ 매수 필요 종목 없음</div>', unsafe_allow_html=True)
+            st.markdown(banner("✅ 매수 필요 종목 없음", "success"), unsafe_allow_html=True)
         else:
             for _, row in buy_df.iterrows():
                 st.markdown(

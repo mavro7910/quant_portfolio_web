@@ -8,6 +8,7 @@ from datetime import date, timedelta
 
 from core.portfolio import Portfolio
 from core.strategy import run_backtest, calc_xirr_from_backtest, BENCHMARKS
+from utils.ui import section_title, banner, metric_card, badge, TEAL, TEAL_DARK, TEAL_LIGHT, TEXT, TEXT_SUB, TEXT_MUTED, BORDER, SURFACE
 from utils.plotly_theme import base_layout, TEAL, BLUE, AMBER, RED, PURPLE, GREEN, TICK_COLOR, FONT_COLOR
 
 
@@ -215,7 +216,7 @@ def render(portfolio: Portfolio):
     st.plotly_chart(fig, width="stretch", key="bt_chart")
 
     # ── 성과 요약 ──────────────────────────────────────────
-    st.markdown('<div class="section-label">성과 요약</div>', unsafe_allow_html=True)
+    st.markdown(section_title("성과 요약"), unsafe_allow_html=True)
 
     invested_final = df_bt["Invested"].iloc[-1]
     summary_rows   = []

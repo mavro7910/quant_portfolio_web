@@ -10,6 +10,7 @@ from core.strategy import (
     fetch_prices, fetch_market_caps,
     MOMENTUM_WEIGHTS, MCAP_PRESETS, VOL_WINDOW, MA_WINDOW,
 )
+from utils.ui import section_title, banner, metric_card, badge, TEAL, TEAL_DARK, TEAL_LIGHT, TEXT, TEXT_SUB, TEXT_MUTED, BORDER, SURFACE
 from utils.plotly_theme import TEAL, FONT_COLOR, TICK_COLOR
 
 _PRESET_LABELS = {
@@ -190,22 +191,22 @@ def _render_sell_result(portfolio, top_n_sell):
 
     c1, c2, c3, c4 = st.columns(4)
     c1.markdown(
-        f'<div class="metric-card"><div class="label">분석 기간</div>'
-        f'<div class="value">{total_days}일</div></div>', unsafe_allow_html=True,
+        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">분석 기간</div>'
+        f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">{total_days}일</div></div>', unsafe_allow_html=True,
     )
     c2.markdown(
-        f'<div class="metric-card"><div class="label">매도 후보</div>'
-        f'<div class="value" style="color:#e05252">{len(sell_candidates)}종목</div></div>',
+        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">매도 후보</div>'
+        f'<div style="font-size:1.25rem;font-weight:700;line-height:1.2;"color:#e05252">{len(sell_candidates)}종목</div></div>',
         unsafe_allow_html=True,
     )
     c3.markdown(
-        f'<div class="metric-card"><div class="label">관찰 종목</div>'
-        f'<div class="value" style="color:#c9873a">{len(watch_candidates)}종목</div></div>',
+        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">관찰 종목</div>'
+        f'<div style="font-size:1.25rem;font-weight:700;line-height:1.2;"color:#c9873a">{len(watch_candidates)}종목</div></div>',
         unsafe_allow_html=True,
     )
     c4.markdown(
-        f'<div class="metric-card"><div class="label">시총 반영</div>'
-        f'<div class="value" style="font-size:1.05rem">{_PRESET_LABELS.get(mcap_preset, mcap_preset)}</div></div>',
+        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">시총 반영</div>'
+        f'<div style="font-size:1.25rem;font-weight:700;line-height:1.2;"font-size:1.05rem">{_PRESET_LABELS.get(mcap_preset, mcap_preset)}</div></div>',
         unsafe_allow_html=True,
     )
     st.write("")
@@ -255,7 +256,7 @@ def _render_sell_result(portfolio, top_n_sell):
         )
 
     # ── 히트맵 ──────────────────────────────────────────
-    st.markdown('<div class="section-label">일별 순위 히트맵 (최근 1달)</div>', unsafe_allow_html=True)
+    st.markdown(section_title("일별 순위 히트맵 (최근 1달)"), unsafe_allow_html=True)
     heatmap_data    = rank_df[tickers_all].T
     date_labels     = [d.strftime("%m/%d") for d in heatmap_data.columns]
     n_tickers_total = len(tickers_all)
