@@ -769,17 +769,17 @@ div[data-testid="stWidgetLabel"] p {{
 [data-baseweb="tooltip"],
 [role="tooltip"],
 div[data-baseweb="popover"] {{
-    background: #252C29 !important;
-    background-color: #252C29 !important;
-    color: #F2F5F4 !important;
-    border: 0.5px solid #3C4642 !important;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.35) !important;
+    background: #F8FAFA !important;
+    background-color: #F8FAFA !important;
+    color: #111827 !important;
+    border: 0.5px solid #D7DDE2 !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.28) !important;
 }}
 [data-baseweb="tooltip"] *,
 [role="tooltip"] *,
 div[data-baseweb="popover"] * {{
-    color: #F2F5F4 !important;
-    -webkit-text-fill-color: #F2F5F4 !important;
+    color: #111827 !important;
+    -webkit-text-fill-color: #111827 !important;
     opacity: 1 !important;
 }}
 [aria-disabled="true"],
