@@ -77,9 +77,15 @@ if "portfolio" not in st.session_state or st.session_state.get("_user_email") !=
     data_path = Path(os.getcwd()) / "data" / f"portfolio_{_file_key}.json"
     st.session_state.portfolio      = Portfolio(path=data_path)
     st.session_state["_user_email"] = _user_email
+    st.session_state["_qpm_theme_loaded"] = False
     invalidate_cache("prices_data", "buy_result", "bt_result", "rebal_result", "sell_result")
 
 portfolio: Portfolio = st.session_state.portfolio
+
+if not st.session_state.get("_qpm_theme_loaded", False):
+    st.session_state["qpm_dark_mode"] = bool(portfolio.get_setting("qpm_dark_mode", False))
+    st.session_state["_qpm_theme_loaded"] = True
+    inject_all()
 
 # ── API 키 자동 로드 ──────────────────────────────────────
 from utils.ai_client import (
@@ -102,6 +108,10 @@ if not has_marketaux_key():
 # ── 헤더 ─────────────────────────────────────────────────
 initials = "".join(p[0].upper() for p in _user_name.split()[:2]) if _user_name else "U"
 
+def _save_dark_mode():
+    portfolio.set_setting("qpm_dark_mode", bool(st.session_state.get("qpm_dark_mode", False)))
+    portfolio.save()
+
 st.markdown(f"""
 <div class="qpm-app-header">
   <div class="qpm-logo">
@@ -121,7 +131,7 @@ st.markdown(f"""
 # 로그아웃/테마 토글 — 헤더 아래에 작게 배치
 _hcol1, _hcol2, _hcol3 = st.columns([6, 1.35, 1])
 with _hcol2:
-    st.toggle("다크 모드", key="qpm_dark_mode")
+    st.toggle("다크 모드", key="qpm_dark_mode", on_change=_save_dark_mode)
 with _hcol3:
     if st.button("로그아웃", key="btn_logout"):
         st.logout()

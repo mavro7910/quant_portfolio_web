@@ -667,6 +667,12 @@ div[data-testid="stCaptionContainer"] {{
     border-color: #303936 !important;
     opacity: 1 !important;
 }}
+.stButton > button:disabled *,
+.stButton > button[disabled] *,
+.stButton > button[aria-disabled="true"] * {{
+    color: #AAB5B1 !important;
+    opacity: 1 !important;
+}}
 .stTextInput input,
 .stNumberInput input,
 .stSelectbox > div > div,
