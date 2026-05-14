@@ -17,14 +17,12 @@ _PRESET_LABELS = {
 
 
 def render(portfolio: Portfolio):
-    st.markdown("""
-<div class="info-banner">
-📅 <b>리밸런싱이란?</b><br>
-시간이 지나면 종목별 수익률 차이로 인해 실제 비중이 목표 비중에서 벗어납니다.
-반기 또는 분기마다 초과 상승한 종목을 일부 매도하고 비중이 낮아진 종목을 매수해
-목표 비중으로 되돌리는 작업입니다.
-</div>
-""", unsafe_allow_html=True)
+    with st.expander("📅 리밸런싱이란?", expanded=False):
+        st.markdown(banner(
+            "시간이 지나면 종목별 수익률 차이로 인해 실제 비중이 목표 비중에서 벗어납니다.<br>"
+            "반기 또는 분기마다 초과 상승한 종목을 일부 매도하고 비중이 낮아진 종목을 매수해 "
+            "목표 비중으로 되돌리는 작업입니다.", "info"
+        ), unsafe_allow_html=True)
 
     if not portfolio.tickers():
         st.info("포트폴리오 탭에서 종목을 먼저 추가하세요.")
