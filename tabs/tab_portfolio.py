@@ -290,44 +290,66 @@ def render(portfolio: Portfolio):
 </div>
 """, unsafe_allow_html=True)
 
-    # ── 종목 리스트 (HTML) ────────────────────────────────
+    # ── 종목 리스트 (HTML) — 상위 3개 + 더보기 ─────────────────
     names_map = st.session_state.get("ticker_names", {})
-    items_html = ""
-    for idx, (t, s) in enumerate(holdings.items()):
-        p = val = chg_str = chg_color = None
+    all_items = list(holdings.items())
+    show_all  = st.session_state.get("portfolio_show_all", False)
+    visible   = all_items if show_all else all_items[:3]
+
+    def _stock_item_html(idx, t, s):
+        p = val = None
         if prices_map is not None:
             try:
-                p = float(prices_map[t])
+                p   = float(prices_map[t])
                 val = p * s * (fx or 1)
             except: pass
-        color    = _ticker_color(t, idx)
-        abbr     = t[:2]
-        name_str = names_map.get(t, "")
-        price_str= f"${p:,.2f}" if p else "—"
-        val_str  = f"₩{val:,.0f}" if val else "—"
-
-        items_html += f"""
-<div style="display:flex;align-items:center;padding:11px 16px;
-            border-bottom:0.5px solid rgba(26,158,143,0.08);gap:12px">
-  <div style="width:34px;height:34px;border-radius:9px;background:{color}22;
+        color     = _ticker_color(t, idx)
+        abbr      = t[:2]
+        name_str  = names_map.get(t, "")
+        price_str = f"${p:,.2f}" if p else "—"
+        val_str   = f"₩{val:,.0f}" if val else "—"
+        return f"""
+<div style="display:flex;align-items:center;padding:12px 16px;
+            border-bottom:0.5px solid rgba(26,158,143,0.07);gap:12px">
+  <div style="width:36px;height:36px;border-radius:10px;background:{color}18;
               color:{color};display:flex;align-items:center;justify-content:center;
-              font-size:11px;font-weight:700;flex-shrink:0">{abbr}</div>
+              font-size:11px;font-weight:700;flex-shrink:0;letter-spacing:0.5px">{abbr}</div>
   <div style="flex:1;min-width:0">
-    <div style="font-size:13.5px;font-weight:600;color:{TEXT}">{t}</div>
-    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:1px">{s:.6f}주{"  ·  " + name_str if name_str else ""}</div>
+    <div style="font-size:14px;font-weight:600;color:{TEXT};letter-spacing:-0.2px">{t}</div>
+    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:2px">{s:.4f}주{"  ·  " + name_str if name_str else ""}</div>
   </div>
-  <div class="qpm-stock-price" style="text-align:right">
-    <div style="font-size:13.5px;font-weight:500;color:{TEXT}">{price_str}</div>
-    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:1px">{val_str}</div>
+  <div class="qpm-stock-price" style="text-align:right;flex-shrink:0">
+    <div style="font-size:13px;font-weight:500;color:{TEXT}">{price_str}</div>
+    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:2px">{val_str}</div>
   </div>
+</div>"""
+
+    items_html = "".join(_stock_item_html(i, t, s) for i, (t, s) in enumerate(visible))
+
+    remaining = len(all_items) - 3
+    more_html = ""
+    if not show_all and remaining > 0:
+        more_html = f"""
+<div style="display:flex;align-items:center;justify-content:center;padding:11px 16px;
+            cursor:pointer;color:{TEAL};font-size:12.5px;font-weight:600;gap:4px">
+  <span>▾ {remaining}개 종목 더보기</span>
 </div>"""
 
     st.markdown(f"""
 <div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.14);
             border-radius:12px;overflow:hidden;margin:8px 0">
-  {items_html}
+  {items_html}{more_html}
 </div>
 """, unsafe_allow_html=True)
+
+    if not show_all and remaining > 0:
+        if st.button(f"▾ {remaining}개 종목 더보기", key="btn_show_all_stocks"):
+            st.session_state["portfolio_show_all"] = True
+            st.rerun()
+    elif show_all and len(all_items) > 3:
+        if st.button("▲ 접기", key="btn_hide_stocks"):
+            st.session_state["portfolio_show_all"] = False
+            st.rerun()
 
     # ── 인터랙티브 수량 편집 테이블 ───────────────────────
     st.markdown(section_title("수량 직접 편집"), unsafe_allow_html=True)

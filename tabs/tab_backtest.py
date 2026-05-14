@@ -37,10 +37,11 @@ def render(portfolio: Portfolio):
         tickers_r    = buy_res["tickers"]
         weights      = buy_res["weights"]
         weight_parts = ", ".join(f"{t} {weights.get(t,0)*100:.1f}%" for t in tickers_r)
-        st.markdown(
-            f'<div class="info-banner">📌 매수 추천 탭 설정 반영 중 — {mcap_label} · Top {n_tickers} · {weight_parts}</div>',
-            unsafe_allow_html=True,
-        )
+        with st.expander("📌 매수 추천 탭 설정 반영 중", expanded=False):
+            st.markdown(banner(
+                f"<b>시총 반영:</b> {mcap_label} · <b>Top N:</b> {n_tickers}<br>"
+                f"<b>종목 비중:</b> {weight_parts}", "info"
+            ), unsafe_allow_html=True)
 
     with st.expander("ℹ️ 백테스트 해석 주의사항", expanded=False):
         st.markdown("""

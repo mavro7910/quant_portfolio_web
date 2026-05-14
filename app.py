@@ -9,7 +9,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(os.getcwd())))
 
 from core.portfolio import Portfolio
-from utils.ui import inject_all, HEADER_GRAD, BORDER, TEAL, TEXT, TEXT_SUB, TEXT_MUTED, SURFACE
+from utils.ui import inject_all, HEADER_GRAD, BORDER, TEAL, TEXT, TEXT_SUB, TEXT_MUTED, SURFACE, ICON_B64
 from tabs import (
     tab_portfolio, tab_ai_signal, tab_buyrec,
     tab_backtest, tab_sell_signal, tab_rebalance, tab_settings,
@@ -40,7 +40,7 @@ if not st.user.is_logged_in:
     st.markdown(f"""
 <div style="background:{HEADER_GRAD};border:0.5px solid {BORDER};border-radius:14px;
             padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
-  <img src="./app/static/icon.png" width="44" height="44"
+  <img src="{ICON_B64}" width="44" height="44"
        style="border-radius:10px"
        onerror="this.style.display='none'">
   <div>
@@ -106,7 +106,7 @@ st.markdown(f"""
             padding:14px 20px;margin-bottom:14px;
             display:flex;align-items:center;justify-content:space-between">
   <div style="display:flex;align-items:center;gap:11px">
-    <img src="./app/static/icon.png" width="36" height="36"
+    <img src="{ICON_B64}" width="36" height="36"
          style="border-radius:9px;box-shadow:0 1px 4px rgba(26,158,143,0.18)"
          onerror="this.style.display='none'">
     <div>

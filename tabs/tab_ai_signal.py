@@ -386,7 +386,7 @@ def _render_api_status(signals: list[dict]):
 # ─────────────────────────────────────────────
 
 def _render_signal_html(signals: list[dict]):
-    """탭 전환 + 스와이프 카드 UI로 렌더링."""
+    """라이트 파스텔 테마 시그널 카드 UI."""
 
     signals_json = json.dumps(signals, ensure_ascii=False)
 
@@ -397,512 +397,422 @@ def _render_signal_html(signals: list[dict]):
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap');
   * {{ margin:0; padding:0; box-sizing:border-box; }}
   :root {{
-    --bg: #0f1117;
-    --surface: #1a1f2e;
-    --surface2: #222736;
-    --border: #2a3350;
-    --text: #e8eaf6;
-    --text-sub: #8892b0;
-    --text-muted: #4a5278;
-    --up: #ff6b6b;
-    --down: #4d9cf8;
-    --accent: #7c83f5;
-    --accent-soft: rgba(124,131,245,0.12);
-    --tag-bg: #1e2440;
-    --green: #4ade80;
-    --yellow: #fbbf24;
+    --bg:          #f4fbfa;
+    --surface:     rgba(255,255,255,0.95);
+    --surface2:    rgba(240,250,248,0.8);
+    --border:      rgba(26,158,143,0.14);
+    --border2:     rgba(26,158,143,0.08);
+    --text:        #1a2a28;
+    --text-sub:    #4a8a84;
+    --text-muted:  #7ab0aa;
+    --teal:        #1a9e8f;
+    --teal-dark:   #0d7a6e;
+    --teal-light:  #e0f5f2;
+    --up:          #e05252;
+    --down:        #4a90d9;
+    --gold:        #b8922a;
+    --gold-light:  #fdf4e0;
+    --green:       #1a9e8f;
+    --yellow:      #c9873a;
+    --red:         #e05252;
   }}
   body {{
-    font-family: 'Pretendard', -apple-system, sans-serif;
-    background: var(--bg); color: var(--text);
-    padding: 0 0 32px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 0 0 24px;
   }}
 
   /* ── 필터 탭 ── */
-  .filter-tabs {{
-    display: flex; gap: 6px; padding: 10px 16px 0; flex-wrap: wrap;
+  .filter-bar {{
+    display: flex; gap: 6px; padding: 12px 16px 8px; flex-wrap: wrap;
+    background: var(--bg);
+    position: sticky; top: 0; z-index: 10;
   }}
-  .filter-tab {{
-    padding: 6px 14px; border-radius: 20px; font-size: 12px;
-    font-weight: 500; cursor: pointer; border: 1px solid var(--border);
-    color: var(--text-sub); background: transparent;
-    font-family: inherit; transition: all 0.2s;
+  .filter-btn {{
+    padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: 0.5px solid var(--border);
+    color: var(--text-sub); background: var(--surface);
+    font-family: inherit; transition: all 0.15s;
   }}
-  .filter-tab.active {{
-    background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
-  }}
-
-  /* ── 카드 리스트 ── */
-  .signal-list {{
-    padding: 10px 16px; display: flex; flex-direction: column; gap: 8px;
+  .filter-btn.active {{
+    background: var(--teal-light); border-color: var(--teal); color: var(--teal-dark);
   }}
 
-  /* ── 카드 (닫힌 상태) ── */
+  /* ── 카드 ── */
+  .card-list {{ padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }}
+
   .signal-card {{
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 14px; padding: 13px 14px;
-    cursor: pointer; transition: all 0.2s;
-    display: flex; align-items: center; gap: 11px;
-    position: relative; overflow: hidden;
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.18s;
+    overflow: hidden;
+    position: relative;
   }}
   .signal-card::before {{
-    content:''; position:absolute; left:0; top:0; bottom:0;
-    width:3px; border-radius:14px 0 0 14px;
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; border-radius: 14px 0 0 14px;
   }}
   .signal-card.up::before    {{ background: var(--up); }}
   .signal-card.down::before  {{ background: var(--down); }}
-  .signal-card.neutral::before {{ background: var(--text-muted); }}
-  .signal-card:hover {{ border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(124,131,245,0.1); }}
-  .signal-card.open  {{ border-radius: 14px 14px 0 0; border-color: var(--accent); border-bottom-color: transparent; }}
+  .signal-card.neutral::before {{ background: var(--border); }}
+  .signal-card:hover {{ border-color: var(--teal); box-shadow: 0 2px 12px rgba(26,158,143,0.1); transform: translateY(-1px); }}
+  .signal-card.open  {{ border-color: var(--teal); border-radius: 14px 14px 0 0; border-bottom-color: transparent; }}
 
-  /* ── 로고 ── */
+  /* ── 카드 헤더 ── */
+  .card-head {{ display: flex; align-items: center; padding: 12px 14px; gap: 11px; }}
   .ticker-icon {{
-    width: 38px; height: 38px; border-radius: 10px;
+    width: 36px; height: 36px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; flex-shrink: 0; color: white;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+    overflow: hidden;
   }}
-
-  /* ── 카드 본문 ── */
-  .card-body {{ flex:1; min-width:0; }}
-  .card-row1 {{
-    display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;
-  }}
-  .ticker-name {{ font-size:15px; font-weight:600; }}
-  .ticker-sub  {{ font-size:11px; color:var(--text-muted); margin-left:5px; font-weight:400; }}
-  .card-meta   {{ display:flex; align-items:center; gap:8px; }}
+  .card-body {{ flex: 1; min-width: 0; }}
+  .card-row1 {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }}
+  .ticker-name {{ font-size: 14.5px; font-weight: 700; color: var(--text); }}
+  .ticker-shares {{ font-size: 11px; color: var(--text-muted); margin-left: 5px; font-weight: 400; }}
   .rec-badge {{
-    font-size:10px; font-weight:700; padding:2px 7px;
-    border-radius:5px; letter-spacing:0.3px;
+    font-size: 10px; font-weight: 700; padding: 2px 8px;
+    border-radius: 6px; letter-spacing: 0.3px;
   }}
-  .rec-buy     {{ background:rgba(74,222,128,0.15); color:var(--green); border:1px solid rgba(74,222,128,0.3); }}
-  .rec-hold    {{ background:rgba(251,191,36,0.15);  color:var(--yellow);border:1px solid rgba(251,191,36,0.3); }}
-  .rec-sell    {{ background:rgba(255,107,107,0.15); color:var(--up);   border:1px solid rgba(255,107,107,0.3); }}
-  .rec-none    {{ background:var(--tag-bg); color:var(--text-muted); border:1px solid var(--border); }}
+  .rec-buy  {{ background: var(--teal-light); color: var(--teal-dark); }}
+  .rec-hold {{ background: var(--gold-light);  color: var(--gold); }}
+  .rec-sell {{ background: #fdeaea; color: var(--red); }}
+  .rec-none {{ background: rgba(26,158,143,0.06); color: var(--text-muted); }}
 
-  .card-row2 {{ display:flex; align-items:center; justify-content:space-between; }}
+  .card-row2 {{ display: flex; align-items: center; justify-content: space-between; gap: 6px; }}
   .card-reason {{
-    font-size:12px; color:var(--text-sub); flex:1;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px;
+    font-size: 12px; color: var(--text-sub); flex: 1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    padding-right: 6px;
   }}
-  .card-right  {{ display:flex; align-items:center; gap:8px; flex-shrink:0; }}
-  .change-badge {{ font-size:13px; font-weight:700; }}
-  .change-badge.up      {{ color:var(--up); }}
-  .change-badge.down    {{ color:var(--down); }}
-  .change-badge.neutral {{ color:var(--text-muted); }}
-  .card-chips  {{ display:flex; gap:4px; margin-top:5px; flex-wrap:wrap; }}
-  .chip {{
-    font-size:10px; padding:2px 7px; border-radius:5px;
-    background:var(--tag-bg); color:var(--text-muted); border:1px solid var(--border);
-  }}
-  .chip.warn {{ background:rgba(255,107,107,0.1); color:#ff9999; border-color:rgba(255,107,107,0.25); }}
-  .chip.good {{ background:rgba(74,222,128,0.1);  color:#86efac; border-color:rgba(74,222,128,0.25); }}
+  .change-badge {{ font-size: 13px; font-weight: 700; flex-shrink: 0; }}
+  .change-badge.up      {{ color: var(--up); }}
+  .change-badge.down    {{ color: var(--down); }}
+  .change-badge.neutral {{ color: var(--text-muted); }}
 
-  .card-arrow {{ color:var(--text-muted); font-size:16px; flex-shrink:0; transition:transform 0.2s; }}
-  .card-arrow.open {{ transform:rotate(90deg); }}
+  .card-chips {{ display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }}
+  .chip {{
+    font-size: 10px; padding: 2px 8px; border-radius: 6px;
+    background: rgba(26,158,143,0.06); color: var(--text-sub);
+    border: 0.5px solid var(--border);
+  }}
+  .chip.warn {{ background: rgba(224,82,82,0.07); color: #b04040; border-color: rgba(224,82,82,0.2); }}
+  .chip.good {{ background: var(--teal-light); color: var(--teal-dark); border-color: rgba(26,158,143,0.2); }}
+  .card-arrow {{ color: var(--text-muted); font-size: 15px; flex-shrink: 0; transition: transform 0.18s; }}
+  .card-arrow.open {{ transform: rotate(90deg); }}
 
   /* ── 상세 패널 ── */
   .detail-wrap {{
-    background:var(--surface2); border:1px solid var(--accent);
-    border-top:none; border-radius:0 0 14px 14px;
-    overflow:hidden;
+    background: var(--surface2);
+    border: 0.5px solid var(--teal);
+    border-top: none;
+    border-radius: 0 0 14px 14px;
+    overflow: hidden;
   }}
-
-  /* 탭 헤더 */
-  .dtab-header {{
-    display:flex; border-bottom:1px solid var(--border);
-  }}
+  .dtab-header {{ display: flex; border-bottom: 0.5px solid var(--border); background: var(--surface); }}
   .dtab-btn {{
-    flex:1; padding:10px 0; font-size:12px; font-weight:600;
-    text-align:center; cursor:pointer; color:var(--text-muted);
-    background:transparent; border:none; font-family:inherit;
-    border-bottom:2px solid transparent; transition:all 0.2s;
-    margin-bottom:-1px;
+    flex: 1; padding: 9px 0; font-size: 12px; font-weight: 600;
+    text-align: center; cursor: pointer; color: var(--text-muted);
+    background: transparent; border: none; font-family: inherit;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: all 0.15s;
   }}
-  .dtab-btn.active {{ color:var(--accent); border-bottom-color:var(--accent); }}
+  .dtab-btn.active {{ color: var(--teal); border-bottom-color: var(--teal); }}
 
-  /* 탭 콘텐츠 */
-  .dtab-content {{ display:none; padding:14px 16px; }}
-  .dtab-content.active {{ display:block; }}
+  .dtab-content {{ display: none; padding: 13px 15px; }}
+  .dtab-content.active {{ display: block; }}
 
-  /* AI 의견 탭 */
+  /* AI 탭 */
   .ai-summary {{
-    background:var(--accent-soft); border:1px solid var(--border);
-    border-radius:10px; padding:11px 13px; margin-bottom:12px;
-    font-size:13px; color:var(--text); line-height:1.55; font-weight:500;
+    background: var(--teal-light); border: 0.5px solid rgba(26,158,143,0.2);
+    border-radius: 10px; padding: 10px 13px; margin-bottom: 11px;
+    font-size: 12.5px; color: var(--text); line-height: 1.55; font-weight: 500;
   }}
-  .bullet-list {{ display:flex; flex-direction:column; gap:8px; margin-bottom:10px; }}
-  .bullet-item {{ display:flex; gap:8px; align-items:flex-start; font-size:12px; color:var(--text-sub); line-height:1.5; }}
+  .bullet-list {{ display: flex; flex-direction: column; gap: 7px; margin-bottom: 10px; }}
+  .bullet-item {{ display: flex; gap: 7px; align-items: flex-start; font-size: 12px; color: var(--text-sub); line-height: 1.5; }}
   .bullet-label {{
-    font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px;
-    flex-shrink:0; margin-top:1px;
+    font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; margin-top: 1px;
   }}
-  .bullet-label.q {{ background:rgba(124,131,245,0.2); color:#a5b4fc; }}
-  .bullet-label.n {{ background:rgba(74,222,128,0.15); color:#86efac; }}
-  .bullet-label.a {{ background:rgba(251,191,36,0.15);  color:#fde68a; }}
-  .bullet-label.ai {{ background:rgba(77,156,248,0.15); color:#93c5fd; border:1px solid rgba(77,156,248,0.25); }}
-  .tag-row {{ display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }}
+  .bl-q  {{ background: rgba(26,158,143,0.12); color: var(--teal-dark); }}
+  .bl-n  {{ background: rgba(26,158,143,0.08); color: var(--teal); }}
+  .bl-a  {{ background: var(--gold-light); color: var(--gold); }}
+  .bl-ai {{ background: rgba(74,144,217,0.1); color: #2a70b0; }}
+  .tag-row {{ display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }}
   .tag {{
-    padding:3px 8px; background:var(--tag-bg); border:1px solid var(--border);
-    border-radius:6px; font-size:11px; color:var(--text-sub);
+    padding: 2px 8px; background: rgba(26,158,143,0.06);
+    border: 0.5px solid var(--border); border-radius: 6px;
+    font-size: 10.5px; color: var(--text-sub);
   }}
-
-  /* 애널리스트 탭 */
-  .ana-grid {{
-    display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;
-  }}
-  .ana-card {{
-    background:var(--surface); border:1px solid var(--border);
-    border-radius:10px; padding:10px 12px;
-  }}
-  .ana-label {{ font-size:10px; color:var(--text-muted); margin-bottom:3px; }}
-  .ana-value {{ font-size:15px; font-weight:700; color:var(--text); }}
-  .ana-sub   {{ font-size:11px; color:var(--text-muted); margin-top:2px; }}
-  .ana-up    {{ color:var(--green); }}
-  .ana-down  {{ color:var(--up); }}
-  .earning-bar {{
-    background:var(--surface); border:1px solid var(--border);
-    border-radius:10px; padding:10px 14px;
-    display:flex; align-items:center; justify-content:space-between;
-  }}
-  .earning-left  {{ font-size:12px; color:var(--text-sub); }}
-  .earning-right {{ font-size:13px; font-weight:700; }}
-  .earning-right.soon {{ color:var(--yellow); }}
-  .earning-right.past {{ color:var(--text-muted); }}
 
   /* 연관기업 */
-  .related-section {{ border-top:1px solid var(--border); padding-top:10px; margin-top:4px; }}
-  .related-title {{ font-size:12px; font-weight:600; color:var(--text-sub); margin-bottom:7px; }}
+  .related-section {{ border-top: 0.5px solid var(--border); padding-top: 10px; margin-top: 8px; }}
+  .related-title {{ font-size: 11px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; }}
   .related-item {{
-    background:var(--surface); border:1px solid var(--border);
-    border-radius:9px; padding:8px 11px; margin-bottom:6px;
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 9px; padding: 8px 11px; margin-bottom: 5px;
   }}
-  .related-ticker {{ font-size:13px; font-weight:600; color:var(--accent); }}
-  .related-reason {{ font-size:11px; color:var(--text-muted); margin-top:2px; line-height:1.4; }}
+  .related-ticker {{ font-size: 12.5px; font-weight: 700; color: var(--teal); }}
+  .related-reason {{ font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }}
+
+  /* 애널리스트 탭 */
+  .ana-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 9px; }}
+  .ana-card {{
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 10px; padding: 10px 12px;
+  }}
+  .ana-label {{ font-size: 10px; color: var(--text-muted); margin-bottom: 3px; font-weight: 600; letter-spacing: 0.3px; }}
+  .ana-value {{ font-size: 15px; font-weight: 700; color: var(--text); }}
+  .ana-sub   {{ font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }}
+  .ana-up    {{ color: var(--teal-dark); }}
+  .ana-dn    {{ color: var(--red); }}
+  .earning-bar {{
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: 10px; padding: 10px 13px;
+    display: flex; align-items: center; justify-content: space-between;
+  }}
+  .earning-left  {{ font-size: 12px; color: var(--text-sub); }}
+  .earning-right {{ font-size: 12.5px; font-weight: 700; }}
+  .earning-soon  {{ color: var(--yellow); }}
+  .earning-past  {{ color: var(--text-muted); }}
 
   /* 뉴스 탭 */
-  .news-item {{
-    padding:10px 0; border-bottom:1px solid var(--border);
-  }}
-  .news-item:last-child {{ border-bottom:none; }}
-  .news-source {{ font-size:10px; color:var(--accent); font-weight:600; margin-bottom:3px; }}
-  .news-title  {{ font-size:12px; color:var(--text-sub); line-height:1.45; margin-bottom:4px; }}
-  .news-snippet {{ font-size:11px; color:var(--text-muted); line-height:1.45; }}
-  .news-senti  {{ display:inline-block; font-size:10px; padding:1px 6px; border-radius:4px; margin-top:4px; }}
-  .news-senti.pos {{ background:rgba(74,222,128,0.15);  color:#86efac; }}
-  .news-senti.neg {{ background:rgba(255,107,107,0.15); color:#ff9999; }}
-  .news-senti.neu {{ background:var(--tag-bg); color:var(--text-muted); }}
+  .news-item {{ padding: 10px 0; border-bottom: 0.5px solid var(--border2); }}
+  .news-item:last-child {{ border-bottom: none; }}
+  .news-source {{ font-size: 10px; color: var(--teal); font-weight: 700; margin-bottom: 3px; }}
+  .news-title  {{ font-size: 12px; color: var(--text-sub); line-height: 1.45; margin-bottom: 4px; }}
+  .news-snippet {{ font-size: 11px; color: var(--text-muted); line-height: 1.4; }}
+  .news-senti  {{ display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-top: 4px; }}
+  .senti-pos {{ background: var(--teal-light); color: var(--teal-dark); }}
+  .senti-neg {{ background: #fdeaea; color: var(--red); }}
+  .senti-neu {{ background: rgba(26,158,143,0.06); color: var(--text-muted); }}
 
-  /* 오류 */
-  .no-signal {{ font-size:13px; color:var(--text-muted); padding:16px 0; text-align:center; }}
-
-  /* 빈 상태 */
-  .empty-state {{ text-align:center; padding:40px 20px; color:var(--text-muted); }}
-  .empty-state .icon {{ font-size:36px; margin-bottom:10px; }}
-
-  @keyframes fadeUp {{
-    from {{ opacity:0; transform:translateY(8px); }}
-    to   {{ opacity:1; transform:translateY(0); }}
-  }}
+  .no-signal {{ font-size: 12.5px; color: var(--text-muted); padding: 16px 0; text-align: center; }}
+  .empty-state {{ text-align: center; padding: 36px 20px; color: var(--text-muted); }}
+  .empty-state .icon {{ font-size: 34px; margin-bottom: 10px; }}
 </style>
 </head>
 <body>
 
-<div class="filter-tabs">
-  <button class="filter-tab active" onclick="setFilter(this,'all')">전체</button>
-  <button class="filter-tab" onclick="setFilter(this,'up')">상승</button>
-  <button class="filter-tab" onclick="setFilter(this,'down')">하락</button>
-  <button class="filter-tab" onclick="setFilter(this,'neutral')">중립</button>
+<div class="filter-bar">
+  <button class="filter-btn active" onclick="setFilter(this,'all')">전체</button>
+  <button class="filter-btn" onclick="setFilter(this,'up')">상승</button>
+  <button class="filter-btn" onclick="setFilter(this,'down')">하락</button>
+  <button class="filter-btn" onclick="setFilter(this,'neutral')">중립</button>
 </div>
 
-<div class="signal-list" id="signalList"></div>
+<div class="card-list" id="cardList"></div>
 
 <script>
-const RAW_DATA = {signals_json};
+const RAW = {signals_json};
 
 const COLORS = [
-  "#3949ab","#1e88e5","#00acc1","#43a047",
-  "#fb8c00","#e53935","#8e24aa","#00897b","#f4511e","#6d4c41",
-  "#546e7a","#c0ca33","#26a69a","#ec407a","#7c83f5"
+  "#1a9e8f","#4a90d9","#c9873a","#8b72c8","#5ab87a",
+  "#e05252","#a0b4b2","#3a8fc8","#c96a8b","#6a9e4a","#b8922a","#4a70a9"
 ];
-const TICKER_COLORS = {{
+const BRAND = {{
   AAPL:"#555",MSFT:"#0078d4",NVDA:"#76b900",AMZN:"#ff9900",
   GOOGL:"#4285f4",META:"#1877f2",TSLA:"#cc0000",
 }};
+function tc(t,i){{ return BRAND[t]||COLORS[i%COLORS.length]; }}
 
-function tickerColor(t, i) {{ return TICKER_COLORS[t] || COLORS[i % COLORS.length]; }}
-
-function tickerIconHtml(ticker, idx, logoUrl) {{
-  const color = tickerColor(ticker, idx);
-  if (logoUrl) {{
-    return `<div class="ticker-icon" style="background:#1a1f2e;overflow:hidden">
-      <img src="${{logoUrl}}" alt="${{ticker}}"
-           style="width:100%;height:100%;object-fit:contain;padding:5px;"
-           onerror="this.parentElement.style.background='${{color}}';this.parentElement.innerHTML='${{ticker.slice(0,2)}}'">
-    </div>`;
-  }}
-  return `<div class="ticker-icon" style="background:${{color}}">${{ticker.slice(0,2)}}</div>`;
+function iconHtml(ticker,idx,logo){{
+  const c = tc(ticker,idx);
+  if(logo) return `<div class="ticker-icon" style="background:#f0f8f7">
+    <img src="${{logo}}" width="36" height="36" style="object-fit:contain;padding:4px;border-radius:10px"
+         onerror="this.parentElement.style.background='${{c}}1a';this.parentElement.innerHTML='${{ticker.slice(0,2)}}'">
+  </div>`;
+  return `<div class="ticker-icon" style="background:${{c}}1a;color:${{c}}">${{ticker.slice(0,2)}}</div>`;
 }}
 
-let currentFilter = "all";
-let openTicker    = null;
-let openTab       = {{}};  // ticker → 'ai'|'analyst'|'news'
+let curFilter = "all";
+let openTicker = null;
+let openTab = {{}};
 
-function setFilter(el, f) {{
-  document.querySelectorAll(".filter-tab").forEach(t => t.classList.remove("active"));
+function setFilter(el,f){{
+  document.querySelectorAll(".filter-btn").forEach(b=>b.classList.remove("active"));
   el.classList.add("active");
-  currentFilter = f;
-  renderList();
+  curFilter=f; render();
 }}
-
-function toggleCard(ticker) {{
-  openTicker = openTicker === ticker ? null : ticker;
-  if (openTicker && !openTab[ticker]) openTab[ticker] = "ai";
-  renderList();
+function toggleCard(t){{
+  openTicker = openTicker===t ? null : t;
+  if(openTicker && !openTab[t]) openTab[t]="ai";
+  render();
 }}
+function switchTab(t,tab,e){{ e.stopPropagation(); openTab[t]=tab; render(); }}
 
-function switchTab(ticker, tab, e) {{
-  e.stopPropagation();
-  openTab[ticker] = tab;
-  renderList();
+function sigClass(item){{
+  const c=item?.change_pct;
+  if(c==null) return "neutral";
+  return c>0?"up":c<0?"down":"neutral";
 }}
-
-function getSignalClass(item) {{
-  const c = item?.change_pct;
-  if (c == null) return "neutral";
-  return c > 0 ? "up" : c < 0 ? "down" : "neutral";
+function recHtml(rec){{
+  if(!rec) return `<span class="rec-badge rec-none">N/A</span>`;
+  const r=rec.toUpperCase();
+  const cls=r.includes("BUY")?"rec-buy":r.includes("SELL")?"rec-sell":"rec-hold";
+  const lbl=r==="STRONG_BUY"?"강력매수":r==="BUY"?"매수":r==="HOLD"?"보유":r==="SELL"?"매도":"매도";
+  return `<span class="rec-badge ${{cls}}">${{lbl}}</span>`;
 }}
-
-function recBadgeHtml(rec) {{
-  if (!rec) return `<span class="rec-badge rec-none">N/A</span>`;
-  const r = rec.toUpperCase();
-  const cls = r.includes("BUY") ? "rec-buy" : r.includes("SELL") ? "rec-sell" : "rec-hold";
-  const label = r === "STRONG_BUY" ? "강력매수" : r === "BUY" ? "매수" :
-                r === "HOLD" ? "보유" : r === "SELL" ? "매도" :
-                r === "UNDERPERFORM" ? "매도" : rec;
-  return `<span class="rec-badge ${{cls}}">${{label}}</span>`;
-}}
-
-function earningChipHtml(ana) {{
-  if (ana?.earnings_days_left == null) return "";
-  const d = ana.earnings_days_left;
-  if (d < 0)  return `<span class="chip">어닝 D+${{Math.abs(d)}} 발표완료</span>`;
-  if (d <= 7) return `<span class="chip warn">🔔 어닝 D-${{d}}</span>`;
-  if (d <= 30) return `<span class="chip">어닝 D-${{d}}</span>`;
+function earningChip(ana){{
+  if(ana?.earnings_days_left==null) return "";
+  const d=ana.earnings_days_left;
+  if(d<0) return `<span class="chip">어닝 D+${{Math.abs(d)}} 완료</span>`;
+  if(d<=7) return `<span class="chip warn">🔔 어닝 D-${{d}}</span>`;
+  if(d<=30) return `<span class="chip">어닝 D-${{d}}</span>`;
   return "";
 }}
-
-function upsideChipHtml(ana) {{
-  if (ana?.target_upside_pct == null) return "";
-  const u = ana.target_upside_pct;
-  const cls = u > 15 ? "good" : u < -5 ? "warn" : "";
-  return `<span class="chip ${{cls}}">목표가 ${{u > 0 ? "+" : ""}}${{u.toFixed(1)}}%</span>`;
+function upsideChip(ana){{
+  if(ana?.target_upside_pct==null) return "";
+  const u=ana.target_upside_pct;
+  const cls=u>15?"good":u<-5?"warn":"";
+  return `<span class="chip ${{cls}}">목표가 ${{u>0?"+":""}}${{u.toFixed(1)}}%</span>`;
 }}
 
-function renderList() {{
-  const list = document.getElementById("signalList");
-  let data = RAW_DATA;
-  if (currentFilter === "up")      data = data.filter(d => getSignalClass(d) === "up");
-  if (currentFilter === "down")    data = data.filter(d => getSignalClass(d) === "down");
-  if (currentFilter === "neutral") data = data.filter(d => getSignalClass(d) === "neutral");
-
-  if (!data.length) {{
-    list.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>해당하는 시그널이 없어요</p></div>`;
+function render(){{
+  const list=document.getElementById("cardList");
+  let data=[...RAW];
+  if(curFilter==="up")      data=data.filter(d=>sigClass(d)==="up");
+  if(curFilter==="down")    data=data.filter(d=>sigClass(d)==="down");
+  if(curFilter==="neutral") data=data.filter(d=>sigClass(d)==="neutral");
+  if(!data.length){{
+    list.innerHTML=`<div class="empty-state"><div class="icon">🔍</div><p>해당하는 시그널이 없어요</p></div>`;
     return;
   }}
-
-  list.innerHTML = data.map((item, i) => {{
-    const ticker   = item.ticker;
-    const sigClass = getSignalClass(item);
-    const change   = item.change_pct != null ? parseFloat(item.change_pct) : null;
-    const changeStr = change != null ? (change >= 0 ? "+" : "") + change.toFixed(2) + "%" : "N/A";
-    const arrow    = sigClass === "up" ? "▲" : sigClass === "down" ? "▼" : "—";
-    const reason   = item.signal?.reason || "분석 정보 없음";
-    const logoUrl  = item.logo_url || null;
-    const ana      = item.analyst || {{}};
-    const isOpen   = openTicker === ticker;
-
-    const detail = isOpen ? renderDetail(item, i) : "";
-
+  list.innerHTML=data.map((item,i)=>{{
+    const t=item.ticker;
+    const sc=sigClass(item);
+    const chg=item.change_pct!=null?parseFloat(item.change_pct):null;
+    const chgStr=chg!=null?(chg>=0?"+":"")+chg.toFixed(2)+"%":"N/A";
+    const arrow=sc==="up"?"▲":sc==="down"?"▼":"—";
+    const reason=item.signal?.reason||"분석 정보 없음";
+    const isOpen=openTicker===t;
+    const ana=item.analyst||{{}};
+    const detail=isOpen?renderDetail(item,i):"";
     return `
-      <div style="animation:fadeUp 0.22s ease ${{i*0.04}}s both">
-        <div class="signal-card ${{sigClass}}${{isOpen ? " open" : ""}}"
-             onclick="toggleCard('${{ticker}}')">
-          ${{tickerIconHtml(ticker, i, logoUrl)}}
+    <div>
+      <div class="signal-card ${{sc}}${{isOpen?" open":""}}" onclick="toggleCard('${{t}}')">
+        <div class="card-head">
+          ${{iconHtml(t,i,item.logo_url)}}
           <div class="card-body">
             <div class="card-row1">
-              <span class="ticker-name">${{ticker}}<span class="ticker-sub">${{item.shares?.toFixed(2)}}주</span></span>
-              <div class="card-meta">
-                ${{recBadgeHtml(ana.rec_key)}}
+              <span class="ticker-name">${{t}}<span class="ticker-shares">${{item.shares?.toFixed(2)}}주</span></span>
+              <div style="display:flex;align-items:center;gap:5px">
+                ${{recHtml(ana.rec_key)}}
               </div>
             </div>
             <div class="card-row2">
               <span class="card-reason">${{reason}}</span>
-              <span class="change-badge ${{sigClass}}">${{arrow}} ${{changeStr}}</span>
+              <span class="change-badge ${{sc}}">${{arrow}} ${{chgStr}}</span>
             </div>
             <div class="card-chips">
-              ${{earningChipHtml(ana)}}
-              ${{upsideChipHtml(ana)}}
+              ${{earningChip(ana)}}${{upsideChip(ana)}}
             </div>
           </div>
-          <div class="card-arrow${{isOpen ? " open" : ""}}">›</div>
+          <div class="card-arrow${{isOpen?" open":""}}">›</div>
         </div>
-        ${{detail}}
-      </div>`;
+      </div>
+      ${{detail}}
+    </div>`;
   }}).join("");
 }}
 
-function renderDetail(item, idx) {{
-  if (!item.signal || item.signal._error) {{
-    const msg = item.signal?._error || "AI 분석 실패";
+function renderDetail(item,idx){{
+  if(!item.signal||item.signal._error){{
+    const msg=item.signal?._error||"AI 분석 실패";
     return `<div class="detail-wrap"><div class="no-signal">⚠️ ${{msg}}</div></div>`;
   }}
+  const t=item.ticker, tab=openTab[t]||"ai";
+  const sig=item.signal, ana=item.analyst||{{}}, arts=item.articles||[];
 
-  const ticker  = item.ticker;
-  const tab     = openTab[ticker] || "ai";
-  const sig     = item.signal;
-  const ana     = item.analyst || {{}};
-  const articles = item.articles || [];
-
-  // ── 탭 헤더 ──────────────────────────────────────────
-  const tabs = [
-    {{ id:"ai",      label:"💡 AI 의견" }},
-    {{ id:"analyst", label:"📊 애널리스트" }},
-    {{ id:"news",    label:"📰 뉴스" }},
-  ];
-  const headerHtml = `<div class="dtab-header">
-    ${{tabs.map(t => `<button class="dtab-btn${{tab===t.id?" active":""}}"
-      onclick="switchTab('${{ticker}}','${{t.id}}',event)">${{t.label}}</button>`).join("")}}
+  const tabs=[{{id:"ai",label:"💡 AI 의견"}},{{id:"analyst",label:"📊 애널리스트"}},{{id:"news",label:"📰 뉴스"}}];
+  const header=`<div class="dtab-header">
+    ${{tabs.map(tb=>`<button class="dtab-btn${{tab===tb.id?" active":""}}" onclick="switchTab('${{t}}','${{tb.id}}',event)">${{tb.label}}</button>`).join("")}}
   </div>`;
 
-  // ── AI 탭 ─────────────────────────────────────────────
-  const bullets = sig.bullets || [];
-  const labels  = ["뉴스","애널리스트","액션","AI 의견"];
-  const lclass  = ["q","n","a","ai"];
-  const bulletsHtml = bullets.map((b, i) => `
+  // AI 탭
+  const bullets=sig.bullets||[];
+  const lbls=["뉴스","애널리스트","액션","AI"];
+  const lcls=["bl-q","bl-n","bl-a","bl-ai"];
+  const bullHtml=bullets.map((b,i)=>`
     <div class="bullet-item">
-      <span class="bullet-label ${{lclass[i] || 'q'}}">${{labels[i] || ""}}</span>
+      <span class="bullet-label ${{lcls[i]||"bl-q"}}">${{lbls[i]||""}}</span>
       <span>${{b}}</span>
     </div>`).join("");
-  const tags    = sig.tags || [];
-  const tagsHtml = tags.map(t => `<div class="tag">${{t}}</div>`).join("");
-  const related = sig.related || [];
-  const relatedHtml = related.length > 0
-    ? `<div class="related-section">
-         <div class="related-title">🔗 연관 기업</div>
-         ${{related.map(r => `
-           <div class="related-item">
-             <div class="related-ticker">${{r.ticker}}</div>
-             <div class="related-reason">${{r.reason}}</div>
-           </div>`).join("")}}
-       </div>` : "";
-  const aiContent = `
-    <div class="dtab-content${{tab==="ai"?" active":""}}">
-      <div class="ai-summary">${{reason_full(sig)}}</div>
-      <div class="bullet-list">${{bulletsHtml}}</div>
-      <div class="tag-row">${{tagsHtml}}</div>
-      ${{relatedHtml}}
+  const tagsHtml=(sig.tags||[]).map(tg=>`<div class="tag">${{tg}}</div>`).join("");
+  const related=sig.related||[];
+  const relHtml=related.length?`<div class="related-section">
+    <div class="related-title">🔗 연관 기업</div>
+    ${{related.map(r=>`<div class="related-item"><div class="related-ticker">${{r.ticker}}</div><div class="related-reason">${{r.reason}}</div></div>`).join("")}}
+  </div>`:"";
+  const aiContent=`<div class="dtab-content${{tab==="ai"?" active":""}}">
+    <div class="ai-summary">${{sig.reason||""}}</div>
+    <div class="bullet-list">${{bullHtml}}</div>
+    <div class="tag-row">${{tagsHtml}}</div>
+    ${{relHtml}}
+  </div>`;
+
+  // 애널리스트 탭
+  const recLbl=ana.rec_key?({{STRONG_BUY:"강력 매수",BUY:"매수",HOLD:"보유",SELL:"매도",UNDERPERFORM:"매도"}}[ana.rec_key]||ana.rec_key):"—";
+  const nAna=ana.n_analysts?`${{ana.n_analysts}}명`:"";
+  const recCls=ana.rec_key?.includes("BUY")?"ana-up":ana.rec_key?.includes("SELL")?"ana-dn":"";
+  const up=ana.target_upside_pct;
+  const upCls=up!=null?(up>0?"ana-up":"ana-dn"):"";
+  const upStr=up!=null?`${{up>0?"+":""}}${{up.toFixed(1)}}%`:"—";
+  const eps=ana.eps_surprise_pct;
+  const epsCls=eps!=null?(eps>0?"ana-up":"ana-dn"):"";
+  const epsStr=eps!=null?`${{eps>0?"+":""}}${{eps.toFixed(1)}}%`:"—";
+  let earHtml="";
+  if(ana.earnings_date){{
+    const d=ana.earnings_days_left;
+    const lbl=d<0?`D+${{Math.abs(d)}} 완료`:`D-${{d}} 예정`;
+    const cls=d!=null&&d<=14&&d>=0?"earning-soon":"earning-past";
+    earHtml=`<div class="earning-bar">
+      <span class="earning-left">📅 실적 발표</span>
+      <span class="earning-right ${{cls}}">${{ana.earnings_date}} · ${{lbl}}</span>
     </div>`;
-
-  // ── 애널리스트 탭 ──────────────────────────────────────
-  const recLabel = ana.rec_key
-    ? ({{ "STRONG_BUY":"강력 매수","BUY":"매수","HOLD":"보유",
-          "SELL":"매도","UNDERPERFORM":"매도" }}[ana.rec_key] || ana.rec_key)
-    : "—";
-  const nAna = ana.n_analysts ? `${{ana.n_analysts}}명` : "";
-  const recColor = ana.rec_key?.includes("BUY") ? "ana-up" :
-                   ana.rec_key?.includes("SELL") ? "ana-down" : "";
-  const upside = ana.target_upside_pct;
-  const upClass = upside != null ? (upside > 0 ? "ana-up" : "ana-down") : "";
-  const upStr   = upside != null ? `${{upside > 0 ? "+" : ""}}${{upside.toFixed(1)}}%` : "—";
-
-  const epsSurp = ana.eps_surprise_pct;
-  const epsCls  = epsSurp != null ? (epsSurp > 0 ? "ana-up" : "ana-down") : "";
-  const epsStr  = epsSurp != null ? `${{epsSurp > 0 ? "+" : ""}}${{epsSurp.toFixed(1)}}%` : "—";
-
-  let earningHtml = "";
-  if (ana.earnings_date) {{
-    const d = ana.earnings_days_left;
-    const label = d < 0 ? `D+${{Math.abs(d)}} 발표완료` : `D-${{d}} 발표예정`;
-    const cls   = d != null && d <= 14 && d >= 0 ? "soon" : "past";
-    earningHtml = `
-      <div class="earning-bar">
-        <span class="earning-left">📅 실적 발표</span>
-        <span class="earning-right ${{cls}}">${{ana.earnings_date}} · ${{label}}</span>
-      </div>`;
   }}
+  const analystContent=`<div class="dtab-content${{tab==="analyst"?" active":""}}">
+    <div class="ana-grid">
+      <div class="ana-card"><div class="ana-label">투자의견</div><div class="ana-value ${{recCls}}">${{recLbl}}</div><div class="ana-sub">${{nAna}} 애널리스트</div></div>
+      <div class="ana-card"><div class="ana-label">목표가 상승여력</div><div class="ana-value ${{upCls}}">${{upStr}}</div><div class="ana-sub">${{ana.target_mean?"$"+ana.target_mean:"—"}}</div></div>
+      <div class="ana-card"><div class="ana-label">EPS 서프라이즈</div><div class="ana-value ${{epsCls}}">${{epsStr}}</div><div class="ana-sub">전분기 대비</div></div>
+      <div class="ana-card"><div class="ana-label">목표가 범위</div><div class="ana-value" style="font-size:12px">${{ana.target_low?"$"+ana.target_low:"—"}} ~ ${{ana.target_high?"$"+ana.target_high:"—"}}</div><div class="ana-sub">Low ~ High</div></div>
+    </div>
+    ${{earHtml}}
+  </div>`;
 
-  const analystContent = `
-    <div class="dtab-content${{tab==="analyst"?" active":""}}">
-      <div class="ana-grid">
-        <div class="ana-card">
-          <div class="ana-label">투자의견</div>
-          <div class="ana-value ${{recColor}}">${{recLabel}}</div>
-          <div class="ana-sub">${{nAna}} 애널리스트</div>
-        </div>
-        <div class="ana-card">
-          <div class="ana-label">목표주가 상승여력</div>
-          <div class="ana-value ${{upClass}}">${{upStr}}</div>
-          <div class="ana-sub">${{ana.target_mean ? "$" + ana.target_mean : "—"}}</div>
-        </div>
-        <div class="ana-card">
-          <div class="ana-label">직전 EPS 서프라이즈</div>
-          <div class="ana-value ${{epsCls}}">${{epsStr}}</div>
-          <div class="ana-sub">전분기 대비</div>
-        </div>
-        <div class="ana-card">
-          <div class="ana-label">목표가 범위</div>
-          <div class="ana-value" style="font-size:12px">
-            ${{ana.target_low ? "$"+ana.target_low : "—"}} ~ ${{ana.target_high ? "$"+ana.target_high : "—"}}
-          </div>
-          <div class="ana-sub">Low ~ High</div>
-        </div>
-      </div>
-      ${{earningHtml}}
+  // 뉴스 탭
+  const newsHtml=arts.length?arts.slice(0,5).map(a=>{{
+    const s=a.sentiment;
+    const scls=s!=null?(s>0.2?"senti-pos":s<-0.2?"senti-neg":"senti-neu"):"";
+    const slbl=s!=null?(s>0.2?"긍정":s<-0.2?"부정":"중립"):"";
+    return `<div class="news-item">
+      ${{a.source?`<div class="news-source">${{a.source}}</div>`:""}}
+      <div class="news-title">${{a.title||""}}</div>
+      ${{a.snippet?`<div class="news-snippet">${{a.snippet.slice(0,150)}}</div>`:""}}
+      ${{scls?`<span class="news-senti ${{scls}}">${{slbl}}</span>`:""}}
     </div>`;
-
-  // ── 뉴스 탭 ────────────────────────────────────────────
-  const newsItems = articles.length > 0
-    ? articles.slice(0, 5).map(a => {{
-        const senti = a.sentiment;
-        const scls  = senti != null ? (senti > 0.2 ? "pos" : senti < -0.2 ? "neg" : "neu") : "";
-        const slabel = senti != null ? (senti > 0.2 ? "긍정" : senti < -0.2 ? "부정" : "중립") : "";
-        return `<div class="news-item">
-          ${{a.source ? `<div class="news-source">${{a.source}}</div>` : ""}}
-          <div class="news-title">${{a.title || ""}}</div>
-          ${{a.snippet ? `<div class="news-snippet">${{a.snippet.slice(0,150)}}</div>` : ""}}
-          ${{scls ? `<span class="news-senti ${{scls}}">${{slabel}}</span>` : ""}}
-        </div>`;
-      }}).join("")
-    : `<div class="no-signal">최근 뉴스 없음</div>`;
-
-  const newsContent = `<div class="dtab-content${{tab==="news"?" active":""}}">
-    ${{newsItems}}
+  }}).join(""):
+  `<div class="no-signal">최근 뉴스 없음</div>`;
+  const newsContent=`<div class="dtab-content${{tab==="news"?" active":""}}">
+    ${{newsHtml}}
   </div>`;
 
   return `<div class="detail-wrap">
-    ${{headerHtml}}
-    ${{aiContent}}
-    ${{analystContent}}
-    ${{newsContent}}
+    ${{header}}${{aiContent}}${{analystContent}}${{newsContent}}
   </div>`;
 }}
 
-function reason_full(sig) {{
-  // reason이 짧으면 bullets[2](액션시사점)도 붙여서 표시
-  const r = sig.reason || "";
-  return r;
-}}
-
-renderList();
+render();
 </script>
 </body>
 </html>
 """
-
     n = len(signals)
-    height = max(500, n * 100 + 200)
+    height = max(500, n * 110 + 200)
     import streamlit.components.v1 as _cmp
     _cmp.html(html, height=height, scrolling=True)

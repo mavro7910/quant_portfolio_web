@@ -21,13 +21,13 @@ _PRESET_LABELS = {
 
 
 def render(portfolio: Portfolio):
-    st.markdown(
-        '<div class="info-banner">'
-        '📌 지난 1달(약 21 거래일) 동안 <b>매일</b> 종목별 랭킹을 계산하여 '
-        '한 번도 설정한 순위(Top N) 안에 들지 못한 종목을 리스트업합니다.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    with st.expander("📌 매도 신호란?", expanded=False):
+        st.markdown(banner(
+            "지난 1달(약 21 거래일) 동안 <b>매일</b> 종목별 랭킹을 계산하여 "
+            "한 번도 설정한 순위(Top N) 안에 들지 못한 종목을 리스트업합니다.<br>"
+            "· <b>매도 후보</b>: 21일간 단 하루도 Top N 미진입<br>"
+            "· <b>관찰 종목</b>: 진입률 50% 미만", "info"
+        ), unsafe_allow_html=True)
 
     col_top, col_mcap6, col_run6 = st.columns([2, 2, 1.2])
     with col_top:
