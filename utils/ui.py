@@ -650,9 +650,36 @@ div[data-testid="stCaptionContainer"] {{
     color: var(--qpm-teal) !important;
     border-color: #365E55 !important;
 }}
+.stButton > button *,
+div[data-testid="stButton"] button *,
+[data-testid^="stBaseButton"] * {{
+    color: inherit !important;
+    -webkit-text-fill-color: currentColor !important;
+}}
 .stButton > button:hover {{
     background: var(--qpm-surface-2) !important;
     border-color: var(--qpm-teal) !important;
+}}
+div[data-testid="stButton"] button:not([disabled]):not([aria-disabled="true"]),
+[data-testid^="stBaseButton"]:not([disabled]):not([aria-disabled="true"]) {{
+    background: var(--qpm-bg) !important;
+    background-color: var(--qpm-bg) !important;
+    color: var(--qpm-teal) !important;
+    border-color: #365E55 !important;
+}}
+div[data-testid="stButton"] button:not([disabled]):not([aria-disabled="true"]):hover,
+div[data-testid="stButton"] button:not([disabled]):not([aria-disabled="true"]):focus,
+div[data-testid="stButton"] button:not([disabled]):not([aria-disabled="true"]):focus-visible,
+div[data-testid="stButton"] button:not([disabled]):not([aria-disabled="true"]):active,
+[data-testid^="stBaseButton"]:not([disabled]):not([aria-disabled="true"]):hover,
+[data-testid^="stBaseButton"]:not([disabled]):not([aria-disabled="true"]):focus,
+[data-testid^="stBaseButton"]:not([disabled]):not([aria-disabled="true"]):focus-visible,
+[data-testid^="stBaseButton"]:not([disabled]):not([aria-disabled="true"]):active {{
+    background: var(--qpm-surface-2) !important;
+    background-color: var(--qpm-surface-2) !important;
+    color: var(--qpm-teal) !important;
+    border-color: var(--qpm-teal) !important;
+    box-shadow: none !important;
 }}
 .stButton > button[kind="primary"],
 .stDownloadButton > button {{
@@ -665,7 +692,12 @@ div[data-testid="stCaptionContainer"] {{
 .stButton > button[aria-disabled="true"],
 div[data-testid="stButton"] button:disabled,
 div[data-testid="stButton"] button[disabled],
-div[data-testid="stButton"] button[aria-disabled="true"] {{
+div[data-testid="stButton"] button[aria-disabled="true"],
+button:disabled,
+button[disabled],
+button[aria-disabled="true"],
+[data-testid^="stBaseButton"][disabled],
+[data-testid^="stBaseButton"][aria-disabled="true"] {{
     background: #252C29 !important;
     background-color: #252C29 !important;
     color: #E2E8E5 !important;
@@ -680,7 +712,12 @@ div[data-testid="stButton"] button:disabled *,
 div[data-testid="stButton"] button[disabled] *,
 div[data-testid="stButton"] button[aria-disabled="true"] *,
 div[data-testid="stButton"] button:disabled p,
-div[data-testid="stButton"] button[disabled] p {{
+div[data-testid="stButton"] button[disabled] p,
+button:disabled *,
+button[disabled] *,
+button[aria-disabled="true"] *,
+[data-testid^="stBaseButton"][disabled] *,
+[data-testid^="stBaseButton"][aria-disabled="true"] * {{
     color: #E2E8E5 !important;
     -webkit-text-fill-color: #E2E8E5 !important;
     opacity: 1 !important;
@@ -693,6 +730,23 @@ div[data-testid="stButton"] button[disabled] p {{
     background: var(--qpm-surface) !important;
     color: var(--qpm-text) !important;
     border-color: var(--qpm-border) !important;
+}}
+.stExpander details,
+.stExpander summary,
+details > summary,
+div[data-testid="stExpander"] details,
+div[data-testid="stExpander"] summary {{
+    background: var(--qpm-surface) !important;
+    background-color: var(--qpm-surface) !important;
+    color: var(--qpm-text) !important;
+    border-color: var(--qpm-border) !important;
+}}
+.stExpander summary *,
+details > summary *,
+div[data-testid="stExpander"] summary * {{
+    color: var(--qpm-text) !important;
+    -webkit-text-fill-color: var(--qpm-text) !important;
+    opacity: 1 !important;
 }}
 .stTextInput label,
 .stNumberInput label,

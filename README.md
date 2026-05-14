@@ -1,103 +1,83 @@
 # QPM Alpha
 
-> 주간 적립식 투자자를 위한 퀀트 포트폴리오 매니저입니다.  
-> 모멘텀, 변동성, 시장 국면, AI 뉴스 시그널을 한 화면에서 읽고 매수/매도/리밸런싱 결정을 더 차분하게 할 수 있도록 설계했습니다.
-
-QPM Alpha는 Streamlit 기반의 단일 페이지 웹 앱입니다. 토스/애플 스타일의 미니멀 UI, 라이트/다크 모드, 모바일 친화 레이아웃, 기업 로고 기반 종목 카드, AI 시그널 카드, 리밸런싱 가이드, 백테스트를 제공합니다.
+QPM Alpha는 적립식 투자자를 위한 웹 기반 포트폴리오 관리 애플리케이션입니다.  
+보유 종목의 평가금액, 주간 매수 추천, AI 기반 뉴스 시그널, 매도 신호, 리밸런싱, 백테스트를 하나의 화면 흐름에서 제공합니다.
 
 ---
 
-## Highlights
+## Overview
 
-- 포트폴리오 총 평가금액을 최상단에서 크게 확인
-- 보유 종목을 평가금액 상위 순으로 정렬
-- 기업 로고가 포함된 종목 카드 UI
-- 라이트/다크 모드 지원 및 사용자별 마지막 테마 저장
-- 시세 갱신, 종목명 조회, 자동 갱신 설정
-- Gemini 기반 AI 시그널, 뉴스, 애널리스트 데이터 요약
-- 주간 매수 추천, 매도 신호, 리밸런싱 계산
-- 백테스트와 벤치마크 비교
-- 모바일에서도 금액, 평가액, 버튼, 차트가 잘 보이도록 최적화
+QPM Alpha는 사용자가 보유한 종목을 기준으로 매주 어떤 종목을 얼마나 매수할지 계산하고, 정기적으로 점검해야 할 매도 후보와 리밸런싱 대상을 보여줍니다.
+
+주요 목표는 다음과 같습니다.
+
+- 포트폴리오 현황을 빠르게 파악
+- 데이터 기반 주간 매수 금액 산출
+- 뉴스와 애널리스트 데이터를 활용한 AI 시그널 확인
+- 과거 성과와 벤치마크 비교
+- 리밸런싱과 매도 점검을 직관적으로 지원
 
 ---
 
-## Screens & Tabs
+## Key Features
 
-| 탭 | 주요 기능 |
+| 영역 | 설명 |
 |---|---|
-| 포트폴리오 | 보유 종목, 평가금액, 원화/달러 총액, 종목 추가/삭제, 수량 편집, 캡처 이미지 기반 업데이트 |
-| AI 시그널 | 보유 종목 뉴스와 애널리스트 데이터를 AI가 요약, 상승/하락 필터, 상세 카드 |
-| 매수 추천 | 팩터 기반 주간 매수 금액, 목표 비중, 추천 수량 |
-| 백테스트 | QPM Alpha 전략과 벤치마크 성과 비교, XIRR, MDD, 변동성, Sharpe |
-| 매도 신호 | 최근 1달 일별 랭킹으로 매도 후보와 관찰 종목 분류 |
-| 리밸런싱 | 현재 비중과 목표 비중 차이를 계산해 “이만큼 더 팔아야 해요 / 사야 해요” 형태로 안내 |
-| 설정 | 주간 투자금, API 키, 벤치마크, 데이터 export/import |
+| 포트폴리오 관리 | 보유 종목, 수량, 평가금액, 원화/달러 총액 확인 |
+| 기업 로고 표시 | 종목 카드와 주요 표에서 기업 로고 표시 |
+| 데이터 업데이트 | 시세 갱신, 종목명 조회, 자동 갱신 설정 |
+| AI 시그널 | 보유 종목의 뉴스와 애널리스트 데이터를 AI가 요약 |
+| 매수 추천 | 모멘텀과 변동성 기반 주간 매수 금액 계산 |
+| 매도 신호 | 최근 1개월 일별 랭킹을 기반으로 매도 후보와 관찰 종목 분류 |
+| 리밸런싱 | 현재 비중과 목표 비중 차이를 계산해 추가 매수/매도 금액 제시 |
+| 백테스트 | QPM Alpha 전략과 벤치마크의 과거 성과 비교 |
+| 테마 저장 | 라이트/다크 모드 설정을 사용자별로 저장 |
+| 모바일 최적화 | 작은 화면에서도 평가금액, 버튼, 차트가 읽히도록 조정 |
 
 ---
 
-## App Flow
-
-GitHub README는 보안 정책상 JavaScript/HTML 애니메이션을 실행하지 않습니다. 그래서 동적 애니메이션 대신 GitHub에서 안정적으로 렌더링되는 Mermaid 다이어그램을 사용합니다.
+## Product Flow
 
 ```mermaid
 flowchart TD
-    A["Google 로그인"] --> B["사용자별 포트폴리오 로드"]
-    B --> C["보유 종목과 설정 복원"]
-    C --> D["시세 / 환율 / 종목명 / 로고 갱신"]
-    D --> E["포트폴리오 현황"]
-    D --> F["AI 시그널"]
-    D --> G["매수 추천"]
-    D --> H["매도 신호"]
-    D --> I["리밸런싱"]
-    G --> J["백테스트"]
-    H --> K["정기 점검"]
-    I --> K
+    A["Google 로그인"] --> B["사용자 포트폴리오 로드"]
+    B --> C["보유 종목 / 설정 / 테마 복원"]
+    C --> D["시세·환율·종목명·로고 갱신"]
+    D --> E["포트폴리오 현황 확인"]
+    E --> F["매수 추천"]
+    E --> G["AI 시그널"]
+    E --> H["매도 신호"]
+    E --> I["리밸런싱"]
+    F --> J["백테스트"]
 ```
 
 ---
 
-## Strategy Flow
+## Tabs
 
-기존 SVG 순서도도 함께 제공합니다.
-
-![QPM Alpha strategy flow](assets/strategy_flow.svg)
-
-```mermaid
-flowchart TB
-    A["매주 실행"] --> B["가격 / 환율 / QQQ / 발행주수 수집"]
-    B --> C["QQQ vs MA200으로 시장 국면 판단"]
-    C --> D{"시장 국면"}
-    D -->|"강세장"| E["모멘텀 70% + 변동성 30%"]
-    D -->|"약세장"| F["모멘텀 40% + 변동성 60%"]
-    E --> G["21/63/126/252일 모멘텀 점수"]
-    F --> G
-    E --> H["60일 변동성 역수 점수"]
-    F --> H
-    G --> I["Z-score 정규화"]
-    H --> I
-    I --> J["ReLU로 음수 alpha 제거"]
-    J --> K["25% 비중 상한"]
-    K --> L["주간 매수 금액 / 목표 비중 산출"]
-```
+| 탭 | 제공 기능 |
+|---|---|
+| 포트폴리오 | 총 평가금액, 보유 종목 리스트, 종목 추가/삭제, 수량 편집, 캡처 이미지 기반 업데이트 |
+| AI 시그널 | 종목별 AI 요약, 뉴스, 애널리스트 데이터, 상승/하락 필터 |
+| 매수 추천 | 주간 투자금 기준 추천 금액, 추천 수량, 목표 비중 |
+| 백테스트 | 평가금액/누적수익률 차트, XIRR, MDD, 변동성, Sharpe |
+| 매도 신호 | Top N 진입률 기반 매도 후보 및 관찰 종목 |
+| 리밸런싱 | 목표 비중 대비 더 사야 할 금액과 더 팔아야 할 금액 |
+| 설정 | 투자금, 벤치마크, API 키, 데이터 가져오기/내보내기 |
 
 ---
 
-## Strategy Summary
+## Investment Logic
 
-### Momentum
+QPM Alpha는 시장 국면에 따라 모멘텀과 변동성 점수를 다르게 반영합니다.
 
-여러 기간의 가격 흐름을 함께 봅니다.
+### Factor Inputs
 
-| 기간 | 거래일 | 가중치 |
-|---|---:|---:|
-| 1개월 | 21일 | 10% |
-| 3개월 | 63일 | 20% |
-| 6개월 | 126일 | 30% |
-| 12개월 | 252일 | 40% |
-
-### Volatility
-
-60일 수익률 표준편차의 역수를 사용합니다. 변동성이 낮은 종목은 하락장에서 더 안정적으로 작동할 가능성이 높습니다.
+| 팩터 | 설명 |
+|---|---|
+| 모멘텀 | 21일, 63일, 126일, 252일 가격 흐름을 가중 반영 |
+| 변동성 역수 | 60일 수익률 표준편차의 역수를 사용 |
+| 시장 국면 | QQQ와 200일 이동평균을 비교해 강세/약세 판단 |
 
 ### Regime Weights
 
@@ -106,11 +86,11 @@ flowchart TB
 | 강세장 | 70% | 30% |
 | 약세장 | 40% | 60% |
 
-### Weighting
+### Weight Calculation
 
 ```text
-alpha = z_momentum * regime_momentum_weight
-      + z_inverse_volatility * regime_volatility_weight
+alpha = z_momentum * momentum_weight
+      + z_inverse_volatility * volatility_weight
 
 weight = relu(alpha)
 weight = normalize(weight)
@@ -119,24 +99,15 @@ weight = cap_each_position_at_25_percent(weight)
 
 ---
 
-## Data & Persistence
+## Data Storage
 
-```mermaid
-flowchart LR
-    A["사용자 이메일"] --> B["SHA-256 해시"]
-    B --> C{"Supabase secrets 있음?"}
-    C -->|"Yes"| D["Supabase portfolios 테이블"]
-    C -->|"No"| E["data/portfolio_{uid}.json"]
-    D --> F["보유 종목 / 설정 / 로고 / 다크모드 저장"]
-    E --> F
-```
-
-- 로그인: Streamlit OAuth / Google OIDC
-- 포트폴리오: Supabase 우선, 없으면 로컬 JSON fallback
-- API 키: 암호화 저장
-- AI 시그널 캐시: 사용자/날짜 기준 저장
-- 다크모드: 사용자 설정으로 저장되어 앱을 다시 켜도 유지
-- 자동 갱신 설정: 사용자 설정으로 저장
+| 항목 | 저장 방식 |
+|---|---|
+| 포트폴리오 | Supabase 우선, 로컬 실행 시 JSON fallback |
+| 사용자 설정 | 포트폴리오 데이터와 함께 저장 |
+| 다크모드 | 사용자 설정으로 저장 |
+| API 키 | 암호화 후 저장 |
+| AI 시그널 캐시 | 사용자와 날짜 기준으로 저장 |
 
 ---
 
@@ -149,7 +120,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-로컬에서 Supabase 없이 실행하면 `data/portfolio_{uid}.json`에 저장됩니다.
+Supabase 설정이 없으면 로컬 JSON 파일에 포트폴리오가 저장됩니다.
 
 ### Optional `.streamlit/secrets.toml`
 
@@ -168,15 +139,9 @@ client_secret = "GOCSPX-xxxx"
 server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
 ```
 
-Secret 생성 예시:
-
-```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
 ---
 
-## Supabase Tables
+## Supabase Schema
 
 ```sql
 create table portfolios (
@@ -209,8 +174,7 @@ quant_portfolio_web/
 ├── app.py
 ├── requirements.txt
 ├── assets/
-│   ├── icon.png
-│   └── strategy_flow.svg
+│   └── icon.png
 ├── core/
 │   ├── data.py
 │   ├── portfolio.py
@@ -235,54 +199,52 @@ quant_portfolio_web/
 
 ## Dependencies
 
-| Package | Version | Purpose |
-|---|---|---|
-| `streamlit` | `1.56.0` | Web app framework |
-| `yfinance` | `>=1.2.0` | Price, FX, company data |
-| `pandas` | `>=2.2.0,<3.0` | Data processing |
-| `numpy` | `>=1.26.0,<2.1` | Numeric computing |
-| `plotly` | `>=5.22.0` | Charts |
-| `scipy` | `>=1.13.0` | XIRR root solving |
-| `Pillow` | `>=10.3.0` | App icon |
-| `requests` | `>=2.32.0` | HTTP requests |
-| `supabase` | `>=2.0.0` | Cloud persistence |
-| `authlib` | `1.6.11` | Google OAuth |
-| `google-generativeai` | `>=0.8.0` | Gemini AI |
-| `cryptography` | `>=42.0.0` | API key encryption |
+| Package | Version |
+|---|---|
+| `streamlit` | `1.56.0` |
+| `yfinance` | `>=1.2.0` |
+| `pandas` | `>=2.2.0,<3.0` |
+| `numpy` | `>=1.26.0,<2.1` |
+| `plotly` | `>=5.22.0` |
+| `scipy` | `>=1.13.0` |
+| `Pillow` | `>=10.3.0` |
+| `requests` | `>=2.32.0` |
+| `supabase` | `>=2.0.0` |
+| `authlib` | `1.6.11` |
+| `google-generativeai` | `>=0.8.0` |
+| `cryptography` | `>=42.0.0` |
 
 ---
 
-## Recent Changes
+## Update History
 
-- Toss/Apple inspired minimal UI
-- White light mode and fatigue-reduced dark mode
-- Persistent dark mode preference
-- Portfolio cards sorted by holding value
-- Mobile portfolio cards now show cash value
-- Enterprise logos reused across portfolio, AI signal, buy recommendation, sell signal, and rebalance views
-- Cleaner portfolio update controls
-- Centered expand/collapse control for holdings list
-- Softer rebalance copy: “이만큼 더 팔아야 해요”, “이만큼 더 사야 해요”
-- Better sell signal summary cards and Apple-like heatmap
-- Backtest legend moved above chart for mobile readability
+### Current
+
+- UI를 단일 페이지 앱 흐름에 맞게 재정리
+- 라이트/다크 모드 지원 및 사용자별 테마 저장
+- 모바일 포트폴리오 카드에서 평가금액 표시 개선
+- 기업 로고를 포트폴리오, AI 시그널, 매수 추천, 매도 신호, 리밸런싱에 적용
+- 보유 종목 리스트를 평가금액 기준으로 정렬
+- 포트폴리오 더보기/접기 버튼 중앙 정렬
+- 데이터 업데이트 컨트롤을 포트폴리오 탭에 직접 노출
+- 매도 신호 요약 카드와 히트맵 디자인 개선
+- 백테스트 차트 레이블 위치 개선
+- README를 제품 소개 형식으로 재작성
+
+### Previous
+
+- Google OAuth 로그인 지원
+- Supabase 기반 포트폴리오 저장
+- Gemini 기반 AI 시그널
+- 캡처 이미지 기반 포트폴리오 업데이트
+- XIRR 기반 백테스트 성과 요약
+- 매도 신호 및 리밸런싱 탭 추가
 
 ---
 
-## Notes
+## Disclaimer
 
-- This app is for information and education. It is not financial advice.
-- Backtests use historical data and cannot guarantee future returns.
-- The strategy can still be affected by survivorship bias because it usually evaluates the current user universe.
-- AI summaries can be wrong or incomplete. Always verify important decisions.
-
----
-
-## References
-
-- Jegadeesh, N. & Titman, S. (1993). *Returns to Buying Winners and Selling Losers.* Journal of Finance.
-- Asness, C., Moskowitz, T., & Pedersen, L. (2013). *Value and Momentum Everywhere.* Journal of Finance.
-- Baker, M. & Haugen, R. (2012). *Low Risk Stocks Outperform within All Observable Markets.* SSRN.
-- Antonacci, G. (2014). *Dual Momentum Investing.* McGraw-Hill.
+이 애플리케이션은 정보 제공 및 교육 목적의 도구입니다. 특정 종목의 매수 또는 매도를 권유하지 않습니다. 모든 투자 판단과 책임은 사용자에게 있으며, 과거 성과가 미래 수익을 보장하지 않습니다.
 
 ---
 
