@@ -661,16 +661,28 @@ div[data-testid="stCaptionContainer"] {{
     border-color: #0F6E56 !important;
 }}
 .stButton > button:disabled,
-.stButton > button[disabled] {{
-    background: #1B211F !important;
-    color: #AAB5B1 !important;
-    border-color: #303936 !important;
+.stButton > button[disabled],
+.stButton > button[aria-disabled="true"],
+div[data-testid="stButton"] button:disabled,
+div[data-testid="stButton"] button[disabled],
+div[data-testid="stButton"] button[aria-disabled="true"] {{
+    background: #252C29 !important;
+    background-color: #252C29 !important;
+    color: #E2E8E5 !important;
+    border-color: #3C4642 !important;
+    box-shadow: none !important;
     opacity: 1 !important;
 }}
 .stButton > button:disabled *,
 .stButton > button[disabled] *,
-.stButton > button[aria-disabled="true"] * {{
-    color: #AAB5B1 !important;
+.stButton > button[aria-disabled="true"] *,
+div[data-testid="stButton"] button:disabled *,
+div[data-testid="stButton"] button[disabled] *,
+div[data-testid="stButton"] button[aria-disabled="true"] *,
+div[data-testid="stButton"] button:disabled p,
+div[data-testid="stButton"] button[disabled] p {{
+    color: #E2E8E5 !important;
+    -webkit-text-fill-color: #E2E8E5 !important;
     opacity: 1 !important;
 }}
 .stTextInput input,
