@@ -371,27 +371,25 @@ def render(portfolio: Portfolio):
     items_html = "".join(_stock_item_html(i, t, s) for i, (t, s) in enumerate(visible))
 
     remaining = len(all_items) - 3
-    more_html = ""
-    if not show_all and remaining > 0:
-        more_html = f"""
-<div class="qpm-more-row">
-  <span>▾ {remaining}개 종목 더보기</span>
-</div>"""
 
     st.markdown(f"""
 <div class="qpm-stock-list">
-  {items_html}{more_html}
+  {items_html}
 </div>
 """, unsafe_allow_html=True)
 
     if not show_all and remaining > 0:
-        if st.button(f"▾ {remaining}개 종목 더보기", key="btn_show_all_stocks"):
-            st.session_state["portfolio_show_all"] = True
-            st.rerun()
+        _, col_more, _ = st.columns([1, 1.25, 1])
+        with col_more:
+            if st.button(f"{remaining}개 종목 더보기", key="btn_show_all_stocks"):
+                st.session_state["portfolio_show_all"] = True
+                st.rerun()
     elif show_all and len(all_items) > 3:
-        if st.button("▲ 접기", key="btn_hide_stocks"):
-            st.session_state["portfolio_show_all"] = False
-            st.rerun()
+        _, col_less, _ = st.columns([1, 1.25, 1])
+        with col_less:
+            if st.button("접기", key="btn_hide_stocks"):
+                st.session_state["portfolio_show_all"] = False
+                st.rerun()
 
     render_management(expanded=False)
 
