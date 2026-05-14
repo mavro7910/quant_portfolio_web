@@ -1,4 +1,4 @@
-"""
+﻿"""
 core/portfolio.py
 
 로컬 실행  → data/portfolio_{uid}.json 파일 저장 (기존 방식 유지)

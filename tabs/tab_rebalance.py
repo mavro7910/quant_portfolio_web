@@ -1,4 +1,4 @@
-"""tabs/tab_rebalance.py — 리밸런싱 탭"""
+﻿"""tabs/tab_rebalance.py — 리밸런싱 탭"""
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -52,7 +52,7 @@ def render(portfolio: Portfolio):
         )
     with col_rb3:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
-        run_rebal = st.button("🔄 리밸런싱 계산 실행", key="btn_rebal")
+        run_rebal = st.button("🔄 리밸런싱 계산 실행", key="btn_rebal", type="primary")
 
     if run_rebal:
         portfolio.set_setting("rebal_mcap_preset", rb_mcap_preset)
@@ -98,18 +98,18 @@ def render(portfolio: Portfolio):
 
     c1, c2, c3 = st.columns(3)
     c1.markdown(
-        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">시장 국면</div>'
+        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">시장 국면</div>'
         f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">{regime_text}</div>'
         f'<div class="sub {"up" if is_bull_rb else "down"}">{"QQQ > MA200" if is_bull_rb else "QQQ < MA200"}</div></div>',
         unsafe_allow_html=True,
     )
     c2.markdown(
-        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">포트폴리오 총액</div>'
+        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">포트폴리오 총액</div>'
         f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">₩{total_val_krw:,.0f}</div></div>',
         unsafe_allow_html=True,
     )
     c3.markdown(
-        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">USD/KRW</div>'
+        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">USD/KRW</div>'
         f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">{fx_rb:,.0f}</div>'
         f'<div class="sub">{"추정값" if fx_est_rb else "실시간"}</div></div>',
         unsafe_allow_html=True,

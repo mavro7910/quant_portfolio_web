@@ -1,4 +1,4 @@
-"""tabs/tab_portfolio.py — 보유 종목 관리 탭"""
+﻿"""tabs/tab_portfolio.py — 보유 종목 관리 탭"""
 
 import base64, json, re, hashlib as _hashlib
 import pandas as pd
@@ -28,7 +28,7 @@ _TICKER_COLORS = {
     "MA":"#eb001b","TSM":"#0066cc","QCOM":"#3253dc",
 }
 _FALLBACK_COLORS = [
-    "#1a9e8f","#4a90d9","#c9873a","#8b72c8","#5ab87a",
+    "#0F6E56","#4a90d9","#c9873a","#8b72c8","#5ab87a",
     "#e05252","#a0b4b2","#3a8fc8","#c96a8b","#6a9e4a",
 ]
 
@@ -263,7 +263,7 @@ def render(portfolio: Portfolio):
     if fx_est:
         st.markdown(banner("⚠️ USD/KRW 환율 조회 실패 — 추정값 사용 중", "warn"), unsafe_allow_html=True)
 
-    # ── 메트릭 그리드 ─────────────────────────────────────
+    # ── 총액 우선 구조 + 메트릭 그리드 ─────────────────────
     if prices_map is not None:
         def _v(t): 
             try: return float(prices_map[t]) * holdings.get(t,0) * fx
@@ -271,20 +271,31 @@ def render(portfolio: Portfolio):
         total_krw = sum(_v(t) for t in holdings)
         total_usd = sum((lambda p: p * holdings.get(t,0))(float(prices_map[t])) 
                         for t in holdings if t in prices_map and prices_map[t] == prices_map[t]) if prices_map is not None else 0
+        fx_label = "추정환율" if fx_est else "실시간"
 
         st.markdown(f"""
-<div class="qpm-metric-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0">
+<div class="qpm-total-section">
+  <div class="qpm-total-label">총 평가금액</div>
+  <div class="qpm-total-value">₩{total_krw:,.0f}</div>
+  <div class="qpm-total-sub">{fx_label} · USD ${total_usd:,.2f}</div>
+</div>
+<div class="qpm-metric-grid">
   {metric_card("보유 종목 수", f"{len(holdings)}개")}
-  {metric_card("총 평가금액 (KRW)", f"₩{total_krw:,.0f}", f"{'추정환율' if fx_est else '실시간'}")}
-  {metric_card("총 평가금액 (USD)", f"${total_usd:,.2f}" if total_usd else "—")}
+  {metric_card("총 평가금액 (USD)", f"${total_usd:,.2f}" if total_usd else "—", "현재가 기준")}
   {metric_card("USD / KRW", f"{fx:,.2f}", "실시간" if not fx_est else "추정값")}
+  {metric_card("마지막 갱신", "방금 전", "세션 기준")}
 </div>
 """, unsafe_allow_html=True)
     else:
         st.markdown(f"""
-<div class="qpm-metric-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0">
+<div class="qpm-total-section">
+  <div class="qpm-total-label">총 평가금액</div>
+  <div class="qpm-total-value">—</div>
+  <div class="qpm-total-sub">시세 갱신 후 평가금액을 확인할 수 있습니다</div>
+</div>
+<div class="qpm-metric-grid">
   {metric_card("보유 종목 수", f"{len(holdings)}개")}
-  {metric_card("총 평가금액", "—", "시세 갱신 필요")}
+  {metric_card("투자금", "—", "시세 갱신 필요")}
   {metric_card("USD / KRW", "—")}
   {metric_card("마지막 갱신", "—")}
 </div>
@@ -309,18 +320,15 @@ def render(portfolio: Portfolio):
         price_str = f"${p:,.2f}" if p else "—"
         val_str   = f"₩{val:,.0f}" if val else "—"
         return f"""
-<div style="display:flex;align-items:center;padding:12px 16px;
-            border-bottom:0.5px solid rgba(26,158,143,0.07);gap:12px">
-  <div style="width:36px;height:36px;border-radius:10px;background:{color}18;
-              color:{color};display:flex;align-items:center;justify-content:center;
-              font-size:11px;font-weight:700;flex-shrink:0;letter-spacing:0.5px">{abbr}</div>
+<div class="qpm-stock-row">
+  <div class="qpm-stock-icon" style="background:{color}15;color:{color}">{abbr}</div>
   <div style="flex:1;min-width:0">
-    <div style="font-size:14px;font-weight:600;color:{TEXT};letter-spacing:-0.2px">{t}</div>
-    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:2px">{s:.4f}주{"  ·  " + name_str if name_str else ""}</div>
+    <div class="qpm-stock-ticker">{t}</div>
+    <div class="qpm-stock-shares">{s:.4f}주{" · " + name_str if name_str else ""}</div>
   </div>
   <div class="qpm-stock-price" style="text-align:right;flex-shrink:0">
-    <div style="font-size:13px;font-weight:500;color:{TEXT}">{price_str}</div>
-    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:2px">{val_str}</div>
+    <div class="qpm-stock-price-main">{price_str}</div>
+    <div class="qpm-stock-value">{val_str}</div>
   </div>
 </div>"""
 
@@ -330,14 +338,12 @@ def render(portfolio: Portfolio):
     more_html = ""
     if not show_all and remaining > 0:
         more_html = f"""
-<div style="display:flex;align-items:center;justify-content:center;padding:11px 16px;
-            cursor:pointer;color:{TEAL};font-size:12.5px;font-weight:600;gap:4px">
+<div class="qpm-more-row">
   <span>▾ {remaining}개 종목 더보기</span>
 </div>"""
 
     st.markdown(f"""
-<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.14);
-            border-radius:12px;overflow:hidden;margin:8px 0">
+<div class="qpm-stock-list">
   {items_html}{more_html}
 </div>
 """, unsafe_allow_html=True)

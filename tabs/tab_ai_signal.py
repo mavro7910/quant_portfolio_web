@@ -1,4 +1,4 @@
-"""
+﻿"""
 tabs/tab_ai_signal.py
 
 AI 시그널 탭.
@@ -168,6 +168,7 @@ def render(portfolio: Portfolio, file_key: str):
             "🔄 스마트 재분석" if cached else "🔍 시그널 분석",
             key="btn_run_signal",
             width="stretch",
+            type="primary",
             help="변동이 큰 종목만 재분석, 나머지는 캐시 사용" if cached else None,
         )
     with col_btn2:
@@ -402,19 +403,19 @@ def _render_signal_html(signals: list[dict]):
     --bg:          #f4fbfa;
     --surface:     rgba(255,255,255,0.95);
     --surface2:    rgba(240,250,248,0.8);
-    --border:      rgba(26,158,143,0.14);
-    --border2:     rgba(26,158,143,0.08);
+    --border:      rgba(15,110,86,0.14);
+    --border2:     rgba(15,110,86,0.08);
     --text:        #1a2a28;
     --text-sub:    #4a8a84;
-    --text-muted:  #7ab0aa;
-    --teal:        #1a9e8f;
-    --teal-dark:   #0d7a6e;
-    --teal-light:  #e0f5f2;
+    --text-muted:  #8A949E;
+    --teal:        #0F6E56;
+    --teal-dark:   #085041;
+    --teal-light:  #E1F5EE;
     --up:          #e05252;
     --down:        #4a90d9;
     --gold:        #b8922a;
     --gold-light:  #fdf4e0;
-    --green:       #1a9e8f;
+    --green:       #0F6E56;
     --yellow:      #c9873a;
     --red:         #e05252;
   }}
@@ -460,7 +461,7 @@ def _render_signal_html(signals: list[dict]):
   .signal-card.up::before    {{ background: var(--up); }}
   .signal-card.down::before  {{ background: var(--down); }}
   .signal-card.neutral::before {{ background: var(--border); }}
-  .signal-card:hover {{ border-color: var(--teal); box-shadow: 0 2px 12px rgba(26,158,143,0.1); transform: translateY(-1px); }}
+  .signal-card:hover {{ border-color: var(--teal); box-shadow: 0 2px 12px rgba(15,110,86,0.1); transform: translateY(-1px); }}
   .signal-card.open  {{ border-color: var(--teal); border-radius: 14px 14px 0 0; border-bottom-color: transparent; }}
 
   /* ── 카드 헤더 ── */
@@ -482,7 +483,7 @@ def _render_signal_html(signals: list[dict]):
   .rec-buy  {{ background: var(--teal-light); color: var(--teal-dark); }}
   .rec-hold {{ background: var(--gold-light);  color: var(--gold); }}
   .rec-sell {{ background: #fdeaea; color: var(--red); }}
-  .rec-none {{ background: rgba(26,158,143,0.06); color: var(--text-muted); }}
+  .rec-none {{ background: rgba(15,110,86,0.06); color: var(--text-muted); }}
 
   .card-row2 {{ display: flex; align-items: center; justify-content: space-between; gap: 6px; }}
   .card-reason {{
@@ -498,11 +499,11 @@ def _render_signal_html(signals: list[dict]):
   .card-chips {{ display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }}
   .chip {{
     font-size: 10px; padding: 2px 8px; border-radius: 6px;
-    background: rgba(26,158,143,0.06); color: var(--text-sub);
+    background: rgba(15,110,86,0.06); color: var(--text-sub);
     border: 0.5px solid var(--border);
   }}
   .chip.warn {{ background: rgba(224,82,82,0.07); color: #b04040; border-color: rgba(224,82,82,0.2); }}
-  .chip.good {{ background: var(--teal-light); color: var(--teal-dark); border-color: rgba(26,158,143,0.2); }}
+  .chip.good {{ background: var(--teal-light); color: var(--teal-dark); border-color: rgba(15,110,86,0.2); }}
   .card-arrow {{ color: var(--text-muted); font-size: 15px; flex-shrink: 0; transition: transform 0.18s; }}
   .card-arrow.open {{ transform: rotate(90deg); }}
 
@@ -529,7 +530,7 @@ def _render_signal_html(signals: list[dict]):
 
   /* AI 탭 */
   .ai-summary {{
-    background: var(--teal-light); border: 0.5px solid rgba(26,158,143,0.2);
+    background: var(--teal-light); border: 0.5px solid rgba(15,110,86,0.2);
     border-radius: 10px; padding: 10px 13px; margin-bottom: 11px;
     font-size: 12.5px; color: var(--text); line-height: 1.55; font-weight: 500;
   }}
@@ -538,13 +539,13 @@ def _render_signal_html(signals: list[dict]):
   .bullet-label {{
     font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; margin-top: 1px;
   }}
-  .bl-q  {{ background: rgba(26,158,143,0.12); color: var(--teal-dark); }}
-  .bl-n  {{ background: rgba(26,158,143,0.08); color: var(--teal); }}
+  .bl-q  {{ background: rgba(15,110,86,0.12); color: var(--teal-dark); }}
+  .bl-n  {{ background: rgba(15,110,86,0.08); color: var(--teal); }}
   .bl-a  {{ background: var(--gold-light); color: var(--gold); }}
   .bl-ai {{ background: rgba(74,144,217,0.1); color: #2a70b0; }}
   .tag-row {{ display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }}
   .tag {{
-    padding: 2px 8px; background: rgba(26,158,143,0.06);
+    padding: 2px 8px; background: rgba(15,110,86,0.06);
     border: 0.5px solid var(--border); border-radius: 6px;
     font-size: 10.5px; color: var(--text-sub);
   }}
@@ -589,7 +590,7 @@ def _render_signal_html(signals: list[dict]):
   .news-senti  {{ display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-top: 4px; }}
   .senti-pos {{ background: var(--teal-light); color: var(--teal-dark); }}
   .senti-neg {{ background: #fdeaea; color: var(--red); }}
-  .senti-neu {{ background: rgba(26,158,143,0.06); color: var(--text-muted); }}
+  .senti-neu {{ background: rgba(15,110,86,0.06); color: var(--text-muted); }}
 
   .no-signal {{ font-size: 12.5px; color: var(--text-muted); padding: 16px 0; text-align: center; }}
   .empty-state {{ text-align: center; padding: 36px 20px; color: var(--text-muted); }}
@@ -611,7 +612,7 @@ def _render_signal_html(signals: list[dict]):
 const RAW = {signals_json};
 
 const COLORS = [
-  "#1a9e8f","#4a90d9","#c9873a","#8b72c8","#5ab87a",
+  "#0F6E56","#4a90d9","#c9873a","#8b72c8","#5ab87a",
   "#e05252","#a0b4b2","#3a8fc8","#c96a8b","#6a9e4a","#b8922a","#4a70a9"
 ];
 const BRAND = {{

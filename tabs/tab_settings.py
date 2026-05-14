@@ -1,4 +1,4 @@
-"""tabs/tab_settings.py — 설정 탭"""
+﻿"""tabs/tab_settings.py — 설정 탭"""
 
 import json
 import streamlit as st
@@ -79,7 +79,7 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
     def key_status(name, has, get_fn, optional=False):
         if has():
             masked = "●●●●" + get_fn()[-4:]
-            return f'<div style="background:#f0faf7;border:0.5px solid rgba(26,158,143,0.28);border-radius:10px;padding:10px 14px;font-size:0.82rem;color:#0e7a6e">✅ <b>{name}</b> <code style="font-size:0.75rem">{masked}</code></div>'
+            return f'<div style="background:#f0faf7;border:0.5px solid rgba(15,110,86,0.28);border-radius:10px;padding:10px 14px;font-size:0.82rem;color:#0e7a6e">✅ <b>{name}</b> <code style="font-size:0.75rem">{masked}</code></div>'
         else:
             tag = " (선택)" if optional else ""
             return f'<div style="background:#fff8f0;border:0.5px solid rgba(200,120,40,0.28);border-radius:10px;padding:10px 14px;font-size:0.82rem;color:#9a5a18">⚠️ <b>{name}</b>{tag} 키 없음</div>'

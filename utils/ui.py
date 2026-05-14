@@ -1,4 +1,4 @@
-ICON_B64 = "data:image/png;base64,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"
+﻿ICON_B64 = "data:image/png;base64,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"
 
 """
 utils/ui.py — QPM Alpha HTML 컴포넌트 헬퍼
@@ -6,23 +6,23 @@ utils/ui.py — QPM Alpha HTML 컴포넌트 헬퍼
 """
 
 # ── 색상 팔레트 ─────────────────────────────────────────
-TEAL        = "#1a9e8f"
-TEAL_DARK   = "#0d7a6e"
-TEAL_LIGHT  = "#e0f5f2"
+TEAL        = "#0F6E56"
+TEAL_DARK   = "#085041"
+TEAL_LIGHT  = "#E1F5EE"
 GOLD        = "#b8922a"
 GOLD_LIGHT  = "#fdf4e0"
 RED         = "#e05252"
 RED_LIGHT   = "#fff2f2"
 BLUE        = "#4a90d9"
-TEXT        = "#1a2a28"
-TEXT_SUB    = "#5a8a85"
-TEXT_MUTED  = "#7ab0aa"
-BORDER      = "rgba(26,158,143,0.16)"
-SURFACE     = "rgba(255,255,255,0.92)"
-SURFACE_DIM = "rgba(255,255,255,0.7)"
-BG_GRAD     = "linear-gradient(160deg,#f0faf9 0%,#f4f8fd 55%,#f6f5ff 100%)"
-HEADER_GRAD = "linear-gradient(135deg,#e4f7f4 0%,#eaf4fb 50%,#ece9ff 100%)"
-TAB_GRAD    = "linear-gradient(135deg,#e6f7f5 0%,#eef5fb 50%,#eeeaff 100%)"
+TEXT        = "#111827"
+TEXT_SUB    = "#4B5563"
+TEXT_MUTED  = "#8A949E"
+BORDER      = "#EDF0F2"
+SURFACE     = "#F7F8FA"
+SURFACE_DIM = "#FBFCFD"
+BG_GRAD     = "#FFFFFF"
+HEADER_GRAD = "#FFFFFF"
+TAB_GRAD    = "#FFFFFF"
 
 
 def section_title(text: str) -> str:
@@ -35,18 +35,17 @@ def section_title(text: str) -> str:
 
 def metric_card(label: str, value: str, sub: str = "", sub_color: str = TEXT_MUTED) -> str:
     return f"""
-<div style="background:{SURFACE};border:0.5px solid {BORDER};border-radius:12px;padding:14px 15px;">
-  <div style="font-size:0.68rem;font-weight:700;color:{TEXT_MUTED};text-transform:uppercase;
-              letter-spacing:0.5px;margin-bottom:5px">{label}</div>
-  <div style="font-size:1.25rem;font-weight:700;color:{TEXT};line-height:1.2">{value}</div>
-  {'<div style="font-size:0.7rem;margin-top:4px;color:' + sub_color + '">' + sub + '</div>' if sub else ''}
+<div class="qpm-metric-card">
+  <div class="qpm-metric-label">{label}</div>
+  <div class="qpm-metric-value">{value}</div>
+  {'<div class="qpm-metric-sub" style="color:' + sub_color + '">' + sub + '</div>' if sub else ''}
 </div>"""
 
 
 def banner(text: str, kind: str = "info") -> str:
     styles = {
         "info":    (f"#eef5ff", f"rgba(60,120,210,0.18)", f"#2a5090"),
-        "success": (f"#f0faf7", f"rgba(26,158,143,0.28)", f"#0e7a6e"),
+        "success": (f"#F2FBF7", f"rgba(15,110,86,0.18)", f"{TEAL_DARK}"),
         "warn":    (f"#fff8f0", f"rgba(200,120,40,0.28)", f"#9a5a18"),
         "danger":  (f"#fff2f2", f"rgba(220,70,70,0.28)",  f"#a82020"),
     }
@@ -77,7 +76,7 @@ def badge(text: str, kind: str = "default") -> str:
 def status_pill(text: str, dot_color: str = "#22c55e") -> str:
     return (
         f'<span style="display:inline-flex;align-items:center;gap:5px;'
-        f'background:{SURFACE};border:0.5px solid {BORDER};border-radius:20px;'
+        f'background:{SURFACE};border:0;border-radius:20px;'
         f'padding:4px 10px;font-size:0.72rem;color:{TEXT_SUB}">'
         f'<span style="width:6px;height:6px;border-radius:50%;background:{dot_color};flex-shrink:0"></span>'
         f'{text}</span>'
@@ -93,71 +92,80 @@ GLOBAL_CSS = f"""
 }}
 [data-testid="stAppViewContainer"] > .main {{ background: transparent !important; }}
 [data-testid="stHeader"] {{ background: transparent !important; }}
-section[data-testid="stSidebar"] {{ background: {HEADER_GRAD} !important; }}
+.block-container {{
+    max-width: 980px !important;
+    padding-top: 28px !important;
+    padding-bottom: 80px !important;
+}}
+[data-testid="stAppViewContainer"] {{
+    background: #FFFFFF !important;
+}}
+section[data-testid="stSidebar"] {{ background: #FFFFFF !important; }}
 
 /* ── 탭 ── */
 .stTabs [data-baseweb="tab-list"] {{
-    background: {TAB_GRAD} !important;
-    border-radius: 12px !important;
-    padding: 4px 6px !important;
+    background: #FFFFFF !important;
+    border-radius: 0 !important;
+    padding: 0 4px !important;
     gap: 2px !important;
-    border: 0.5px solid {BORDER} !important;
+    border-bottom: 0.5px solid {BORDER} !important;
 }}
 .stTabs [data-baseweb="tab"] {{
-    border-radius: 8px !important;
+    border-radius: 0 !important;
     color: {TEXT_SUB} !important;
     font-weight: 500 !important;
     font-size: 0.83rem !important;
-    padding: 7px 12px !important;
+    padding: 10px 12px !important;
     background: transparent !important;
 }}
 .stTabs [aria-selected="true"] {{
-    background: rgba(255,255,255,0.92) !important;
+    background: transparent !important;
     color: {TEAL} !important;
-    box-shadow: 0 1px 4px rgba(26,158,143,0.14) !important;
+    box-shadow: inset 0 -2px 0 {TEAL} !important;
 }}
 .stTabs [data-baseweb="tab-panel"] {{ padding-top: 16px !important; }}
 
 /* ── 버튼 — 미니멀 라이트 ── */
 .stButton > button {{
-    background: rgba(255,255,255,0.95) !important;
+    background: #FFFFFF !important;
     color: {TEAL} !important;
-    border: 0.5px solid rgba(26,158,143,0.35) !important;
-    border-radius: 9px !important;
+    border: 0.5px solid rgba(15,110,86,0.28) !important;
+    border-radius: 8px !important;
     font-weight: 600 !important;
     font-size: 0.83rem !important;
     transition: all 0.15s !important;
     width: 100% !important;
-    letter-spacing: 0.1px !important;
+    letter-spacing: 0 !important;
+    min-height: 38px !important;
 }}
 .stButton > button:hover {{
-    background: {TEAL_LIGHT} !important;
+    background: #F2FBF7 !important;
     border-color: {TEAL} !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 2px 8px rgba(26,158,143,0.12) !important;
+    box-shadow: none !important;
 }}
 .stButton > button:active {{
     transform: translateY(0) !important;
-    background: rgba(26,158,143,0.12) !important;
+    background: rgba(15,110,86,0.10) !important;
 }}
 /* 주요 액션 버튼 (primary) */
 .stButton > button[kind="primary"] {{
     background: {TEAL} !important;
     color: white !important;
-    border: none !important;
+    border: 0.5px solid {TEAL} !important;
 }}
 
 /* ── 입력 ── */
 .stTextInput input, .stNumberInput input, .stSelectbox > div > div {{
-    background: rgba(255,255,255,0.95) !important;
+    background: #FFFFFF !important;
     color: {TEXT} !important;
-    border: 0.5px solid rgba(26,158,143,0.22) !important;
+    border: 0.5px solid {BORDER} !important;
     border-radius: 8px !important;
     font-size: 0.86rem !important;
 }}
 .stTextInput input:focus, .stNumberInput input:focus {{
     border-color: {TEAL} !important;
-    box-shadow: 0 0 0 2px rgba(26,158,143,0.1) !important;
+    box-shadow: 0 0 0 2px rgba(15,110,86,0.08) !important;
 }}
 .stTextInput input::placeholder {{ color: #b0ccc9 !important; }}
 .stTextInput label, .stNumberInput label, .stSelectbox label,
@@ -175,25 +183,25 @@ section[data-testid="stSidebar"] {{ background: {HEADER_GRAD} !important; }}
 
 /* ── 데이터프레임 ── */
 [data-testid="stDataFrame"] th {{
-    background: linear-gradient(135deg,#e4f7f4,#eaf3fb) !important;
+    background: #F7F8FA !important;
     color: {TEAL} !important;
     font-weight: 700 !important;
     font-size: 0.76rem !important;
     letter-spacing: 0.2px !important;
-    border-bottom: 0.5px solid rgba(26,158,143,0.15) !important;
+    border-bottom: 0.5px solid {BORDER} !important;
 }}
 [data-testid="stDataFrame"] td {{
     color: {TEXT} !important;
     font-size: 0.82rem !important;
 }}
 [data-testid="stDataFrame"] tr:hover td {{
-    background: rgba(26,158,143,0.03) !important;
+    background: #FBFCFD !important;
 }}
 [data-testid="stDataFrame"] {{ border-radius: 10px !important; overflow: hidden !important; }}
 
 /* ── 익스팬더 ── */
 .stExpander {{
-    background: rgba(255,255,255,0.78) !important;
+    background: #FFFFFF !important;
     border: 0.5px solid {BORDER} !important;
     border-radius: 10px !important;
 }}
@@ -207,7 +215,7 @@ details > summary {{ color: {TEXT_SUB} !important; font-size: 0.83rem !important
 
 /* ── 다운로드 버튼 ── */
 .stDownloadButton > button {{
-    background: {TEAL_DARK} !important;
+    background: {TEAL} !important;
     color: white !important;
     border: none !important;
     border-radius: 9px !important;
@@ -218,8 +226,8 @@ details > summary {{ color: {TEXT_SUB} !important; font-size: 0.83rem !important
 
 /* ── 파일 업로더 ── */
 [data-testid="stFileUploader"] {{
-    background: rgba(255,255,255,0.75) !important;
-    border: 0.5px dashed rgba(26,158,143,0.28) !important;
+    background: #FBFCFD !important;
+    border: 0.5px dashed rgba(15,110,86,0.22) !important;
     border-radius: 10px !important;
 }}
 
@@ -234,6 +242,193 @@ div[data-testid="column"]:has(.stButton) .stButton {{ margin-bottom:0 !important
 /* ── 프로그레스 ── */
 .stProgress > div > div {{ background: {TEAL} !important; }}
 
+.qpm-app-header {{
+    background: #FFFFFF;
+    border-bottom: 0.5px solid {BORDER};
+    padding: 18px 0 14px;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}}
+.qpm-logo {{
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}}
+.qpm-logo img {{
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+}}
+.qpm-logo-title {{
+    font-size: 15px;
+    font-weight: 600;
+    color: {TEXT};
+    letter-spacing: 0;
+}}
+.qpm-logo-title span {{ color: {TEAL}; }}
+.qpm-logo-subtitle {{
+    font-size: 11px;
+    color: {TEXT_MUTED};
+    margin-top: 1px;
+}}
+.qpm-user-pill {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: {SURFACE};
+    border-radius: 20px;
+    padding: 4px 10px 4px 5px;
+    color: {TEXT_SUB};
+    font-size: 11px;
+    max-width: 260px;
+}}
+.qpm-avatar {{
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: {TEAL_LIGHT};
+    color: {TEAL_DARK};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 600;
+    flex-shrink: 0;
+}}
+.qpm-total-section {{
+    margin: 18px 0 22px;
+}}
+.qpm-total-label {{
+    font-size: 11px;
+    color: {TEXT_SUB};
+    margin-bottom: 5px;
+}}
+.qpm-total-value {{
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    font-weight: 650;
+    color: {TEXT};
+    letter-spacing: 0;
+    line-height: 1.05;
+}}
+.qpm-total-sub {{
+    font-size: 13px;
+    color: {TEAL};
+    margin-top: 8px;
+}}
+.qpm-metric-grid {{
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0 0 22px;
+}}
+.qpm-metric-card {{
+    background: {SURFACE};
+    border: 0;
+    border-radius: 8px;
+    padding: 12px 13px;
+    min-width: 0;
+}}
+.qpm-metric-label {{
+    font-size: 10px;
+    font-weight: 600;
+    color: {TEXT_MUTED};
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 4px;
+}}
+.qpm-metric-value {{
+    font-size: 15px;
+    font-weight: 600;
+    color: {TEXT};
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}}
+.qpm-metric-sub {{
+    font-size: 10px;
+    margin-top: 2px;
+}}
+.qpm-stock-list {{
+    background: #FFFFFF;
+    border: 0;
+    border-radius: 0;
+    overflow: hidden;
+    margin: 8px 0 16px;
+}}
+.qpm-stock-row {{
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 0.5px solid {BORDER};
+    gap: 11px;
+}}
+.qpm-stock-row:last-child {{ border-bottom: 0; }}
+.qpm-stock-icon {{
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    flex-shrink: 0;
+}}
+.qpm-stock-ticker {{
+    font-size: 13px;
+    font-weight: 600;
+    color: {TEXT};
+}}
+.qpm-stock-shares {{
+    font-size: 11px;
+    color: {TEXT_SUB};
+    margin-top: 1px;
+}}
+.qpm-stock-price-main {{
+    font-size: 13px;
+    font-weight: 600;
+    color: {TEXT};
+}}
+.qpm-stock-value {{
+    font-size: 11px;
+    color: {TEXT_MUTED};
+    margin-top: 1px;
+}}
+.qpm-more-row {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    color: {TEXT_SUB};
+    font-size: 12px;
+    gap: 4px;
+}}
+.qpm-footer-status {{
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-top: 0.5px solid {BORDER};
+    background: {SURFACE};
+    color: {TEXT_SUB};
+    font-size: 10px;
+}}
+.qpm-status-dot {{
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #1D9E75;
+    flex-shrink: 0;
+}}
+
 /* ── 숨기기 ── */
 #MainMenu {{ visibility:hidden; }}
 footer    {{ visibility:hidden; }}
@@ -247,8 +442,10 @@ header    {{ visibility:hidden; }}
     .stTabs [data-baseweb="tab"] {{ padding: 6px 8px !important; font-size:0.76rem !important; }}
 }}
 @media (max-width: 480px) {{
-    .qpm-metric-grid {{ grid-template-columns: 1fr !important; }}
+    .qpm-metric-grid {{ grid-template-columns: 1fr 1fr !important; }}
     .qpm-stock-price {{ display:none !important; }}
+    .qpm-app-header {{ align-items:flex-start; flex-direction:column; }}
+    .qpm-user-pill {{ max-width:100%; }}
 }}
 </style>
 """

@@ -1,4 +1,4 @@
-"""tabs/tab_sell_signal.py — 매도 신호 탭"""
+﻿"""tabs/tab_sell_signal.py — 매도 신호 탭"""
 
 import numpy as np
 import pandas as pd
@@ -55,7 +55,7 @@ def render(portfolio: Portfolio):
         )
     with col_run6:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
-        run_sell = st.button("🔍 분석 실행", key="btn_sell_signal")
+        run_sell = st.button("🔍 분석 실행", key="btn_sell_signal", type="primary")
 
     if run_sell:
         if not portfolio.tickers():
@@ -191,21 +191,21 @@ def _render_sell_result(portfolio, top_n_sell):
 
     c1, c2, c3, c4 = st.columns(4)
     c1.markdown(
-        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">분석 기간</div>'
+        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">분석 기간</div>'
         f'<div style="font-size:1.25rem;font-weight:700;color:#1a2a28;line-height:1.2">{total_days}일</div></div>', unsafe_allow_html=True,
     )
     c2.markdown(
-        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">매도 후보</div>'
+        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">매도 후보</div>'
         f'<div style="font-size:1.25rem;font-weight:700;line-height:1.2;"color:#e05252">{len(sell_candidates)}종목</div></div>',
         unsafe_allow_html=True,
     )
     c3.markdown(
-        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">관찰 종목</div>'
+        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">관찰 종목</div>'
         f'<div style="font-size:1.25rem;font-weight:700;line-height:1.2;"color:#c9873a">{len(watch_candidates)}종목</div></div>',
         unsafe_allow_html=True,
     )
     c4.markdown(
-        f'<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.16);border-radius:12px;padding:14px 15px"><div style="font-size:0.68rem;font-weight:700;color:#7ab0aa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">시총 반영</div>'
+        f'<div style="background:#F7F8FA;border:0;border-radius:8px;padding:12px 13px"><div style="font-size:0.68rem;font-weight:700;color:#8A949E;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">시총 반영</div>'
         f'<div style="font-size:1.25rem;font-weight:700;line-height:1.2;"font-size:1.05rem">{_PRESET_LABELS.get(mcap_preset, mcap_preset)}</div></div>',
         unsafe_allow_html=True,
     )
@@ -263,8 +263,8 @@ def _render_sell_result(portfolio, top_n_sell):
     cut = top_n_v / n_tickers_total if n_tickers_total > 0 else 0.5
 
     colorscale = [
-        [0.0,  "#e0f5f2"],
-        [cut,  "#1a9e8f"],
+        [0.0,  "#E1F5EE"],
+        [cut,  "#0F6E56"],
         [cut + 0.01, "#fdecea"],
         [1.0,  "#e05252"],
     ]

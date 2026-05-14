@@ -1,4 +1,4 @@
-"""tabs/tab_buyrec.py — 매수 추천 탭"""
+﻿"""tabs/tab_buyrec.py — 매수 추천 탭"""
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -41,7 +41,7 @@ def render(portfolio: Portfolio):
                                help="\n".join(f"**{_PRESET_LABELS[k]}**: {_PRESET_DESC[k]}" for k in _opts))
     with col_run:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
-        run_buy = st.button("▶ 매수 추천 실행", key="btn_buy")
+        run_buy = st.button("▶ 매수 추천 실행", key="btn_buy", type="primary")
 
     _max_n    = len(portfolio.tickers()) if portfolio.tickers() else 20
     _saved_n  = portfolio.get_setting("top_n", 10)
@@ -97,12 +97,12 @@ def render(portfolio: Portfolio):
 
     # ── 메트릭 그리드 ─────────────────────────────────────
     regime_text = "강세장" if is_bull else "약세장"
-    regime_sub  = f'<span style="color:{"#1a9e8f" if is_bull else "#e05252"}">{"QQQ > MA200" if is_bull else "QQQ < MA200"}</span>'
+    regime_sub  = f'<span style="color:{"#0F6E56" if is_bull else "#e05252"}">{"QQQ > MA200" if is_bull else "QQQ < MA200"}</span>'
     total_buy   = safe_sum(buy_krw)
 
     st.markdown(f"""
 <div class="qpm-metric-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0">
-  {metric_card("시장 국면", regime_text, f'{"QQQ > MA200" if is_bull else "QQQ < MA200"}', "#1a9e8f" if is_bull else "#e05252")}
+  {metric_card("시장 국면", regime_text, f'{"QQQ > MA200" if is_bull else "QQQ < MA200"}', "#0F6E56" if is_bull else "#e05252")}
   {metric_card("시총 반영", _PRESET_LABELS.get(mcap_pname,mcap_pname), _PRESET_DESC.get(mcap_pname,""))}
   {metric_card("USD / KRW", f"{fx:,.0f}", "추정값" if fx_est else "실시간")}
   {metric_card("포트폴리오 총액", f"${total_usd:,.0f}", "현재가 기준")}
@@ -120,7 +120,7 @@ def render(portfolio: Portfolio):
         c   = _colors[i % len(_colors)]
         rows_html += f"""
 <div class="qpm-rec-row" style="display:grid;grid-template-columns:26px 1fr 52px 90px;
-     gap:10px;align-items:center;padding:10px 0;border-bottom:0.5px solid rgba(26,158,143,0.08)">
+     gap:10px;align-items:center;padding:10px 0;border-bottom:0.5px solid rgba(15,110,86,0.08)">
   <div style="width:24px;height:24px;border-radius:50%;background:{c}18;color:{c};
               display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">{i+1}</div>
   <div>
@@ -135,8 +135,7 @@ def render(portfolio: Portfolio):
     preset_badge = badge(_PRESET_LABELS.get(mcap_pname,mcap_pname),"gold")
 
     st.markdown(f"""
-<div style="background:rgba(255,255,255,0.92);border:0.5px solid rgba(26,158,143,0.14);
-            border-radius:12px;padding:15px 16px;margin:4px 0">
+<div style="background:#FFFFFF;border:0;border-radius:0;padding:15px 0;margin:4px 0">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px">
     <div style="display:flex;align-items:center;gap:7px">
       {regime_badge} {preset_badge}
@@ -144,7 +143,7 @@ def render(portfolio: Portfolio):
     <span style="font-size:11px;color:{TEXT_MUTED}">예산 ₩{budget:,} · QPM Alpha</span>
   </div>
   {rows_html}
-  <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid rgba(26,158,143,0.1);
+  <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid rgba(15,110,86,0.1);
               font-size:13px;font-weight:700;color:{TEAL};text-align:right">
     총 ₩{total_buy:,.0f}
   </div>

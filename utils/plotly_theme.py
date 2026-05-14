@@ -1,9 +1,9 @@
-"""
+﻿"""
 utils/plotly_theme.py — QPM Alpha 공통 Plotly 테마
 파스텔 틸 팔레트 기반 차트 스타일
 """
 
-TEAL       = "#1a9e8f"
+TEAL       = "#0F6E56"
 BLUE       = "#4a90d9"
 AMBER      = "#c9873a"
 RED        = "#e05252"
@@ -13,7 +13,7 @@ GRAY       = "#a0b4b2"
 
 BG_PAPER   = "rgba(244,251,250,0)"   # transparent — 앱 배경과 자연스럽게 합성
 BG_PLOT    = "rgba(255,255,255,0.7)"
-GRID_COLOR = "rgba(26,158,143,0.08)"
+GRID_COLOR = "rgba(15,110,86,0.08)"
 TICK_COLOR = "#7aada8"
 FONT_COLOR = "#2a3a38"
 LEGEND_BG  = "rgba(255,255,255,0.85)"
@@ -59,7 +59,7 @@ def base_layout(title: str = "", height: int = 480) -> dict:
             yanchor="top", y=-0.16,
             xanchor="center", x=0.5,
             bgcolor=LEGEND_BG,
-            bordercolor="rgba(26,158,143,0.15)",
+            bordercolor="rgba(15,110,86,0.15)",
             borderwidth=0.5,
             font=dict(color=FONT_COLOR, size=11),
         ),

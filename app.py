@@ -1,4 +1,4 @@
-"""app.py — QPM Alpha 진입점"""
+﻿"""app.py — QPM Alpha 진입점"""
 
 import hashlib, sys, os
 from pathlib import Path
@@ -38,8 +38,8 @@ def invalidate_cache(*keys):
 # ── 로그인 게이트 ────────────────────────────────────────
 if not st.user.is_logged_in:
     st.markdown(f"""
-<div style="background:{HEADER_GRAD};border:0.5px solid {BORDER};border-radius:14px;
-            padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+<div style="background:#FFFFFF;border-bottom:0.5px solid {BORDER};
+            padding:18px 0 16px;margin-bottom:22px;display:flex;align-items:center;gap:12px">
   <img src="{ICON_B64}" width="44" height="44"
        style="border-radius:10px"
        onerror="this.style.display='none'">
@@ -62,7 +62,7 @@ if not st.user.is_logged_in:
     )
     col_login, _ = st.columns([1, 3])
     with col_login:
-        if st.button("Google로 로그인", key="btn_login"):
+        if st.button("Google로 로그인", key="btn_login", type="primary"):
             st.login("google")
     st.stop()
 
@@ -102,31 +102,17 @@ if not has_marketaux_key():
 initials = "".join(p[0].upper() for p in _user_name.split()[:2]) if _user_name else "U"
 
 st.markdown(f"""
-<div style="background:{HEADER_GRAD};border:0.5px solid {BORDER};border-radius:14px;
-            padding:14px 20px;margin-bottom:14px;
-            display:flex;align-items:center;justify-content:space-between">
-  <div style="display:flex;align-items:center;gap:11px">
-    <img src="{ICON_B64}" width="36" height="36"
-         style="border-radius:9px;box-shadow:0 1px 4px rgba(26,158,143,0.18)"
-         onerror="this.style.display='none'">
+<div class="qpm-app-header">
+  <div class="qpm-logo">
+    <img src="{ICON_B64}" alt="QPM" onerror="this.style.display='none'">
     <div>
-      <div style="font-size:1.2rem;font-weight:700;color:{TEXT};letter-spacing:-0.2px">
-        QPM <span style="color:{TEAL}">Alpha</span>
-      </div>
-      <div style="font-size:0.75rem;color:{TEXT_MUTED};margin-top:1px">
-        Quantitative Portfolio Manager · Factor Momentum Strategy
-      </div>
+      <div class="qpm-logo-title">QPM <span>Alpha</span></div>
+      <div class="qpm-logo-subtitle">Quantitative Portfolio Manager</div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px">
-    <div style="display:inline-flex;align-items:center;gap:6px;
-                background:rgba(255,255,255,0.8);border:0.5px solid rgba(26,158,143,0.2);
-                border-radius:20px;padding:4px 10px 4px 6px">
-      <div style="width:22px;height:22px;border-radius:50%;background:#d8f3ef;
-                  display:flex;align-items:center;justify-content:center;
-                  font-size:10px;font-weight:700;color:{TEAL}">{initials}</div>
-      <span style="font-size:0.76rem;color:{TEXT_SUB}">{_user_email}</span>
-    </div>
+  <div class="qpm-user-pill">
+    <div class="qpm-avatar">{initials}</div>
+    <span>{_user_email}</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -150,3 +136,10 @@ with tab_bt:    tab_backtest.render(portfolio)
 with tab_sell:  tab_sell_signal.render(portfolio)
 with tab_rebal: tab_rebalance.render(portfolio)
 with tab_cfg:   tab_settings.render(portfolio, _user_email, _user_name, _file_key)
+
+st.markdown("""
+<div class="qpm-footer-status">
+  <span class="qpm-status-dot"></span>
+  <span>Yahoo Finance 정상 · Finnhub 15/15</span>
+</div>
+""", unsafe_allow_html=True)

@@ -1,4 +1,4 @@
-"""tabs/tab_backtest.py — 백테스트 탭"""
+﻿"""tabs/tab_backtest.py — 백테스트 탭"""
 
 import numpy as np
 import pandas as pd
@@ -66,7 +66,7 @@ def render(portfolio: Portfolio):
         bm_input = st.text_input("벤치마크 티커 (쉼표 구분)", value=", ".join(portfolio.benchmarks))
     with col_run2:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
-        run_bt = st.button("▶ 백테스트 실행", key="btn_bt")
+        run_bt = st.button("▶ 백테스트 실행", key="btn_bt", type="primary")
 
     custom_start = custom_end = None
     if period_label == "직접 입력":
@@ -162,13 +162,13 @@ def render(portfolio: Portfolio):
     if chart_mode == "평가금액 (KRW)":
         fig.add_trace(go.Scatter(
             x=df_bt.index, y=df_bt["Invested"], name="누적 투자금",
-            fill="tozeroy", fillcolor="rgba(26,158,143,0.05)",
-            line=dict(color="rgba(26,158,143,0.3)", width=1, dash="dot"),
+            fill="tozeroy", fillcolor="rgba(15,110,86,0.05)",
+            line=dict(color="rgba(15,110,86,0.3)", width=1, dash="dot"),
         ))
         fig.add_trace(go.Scatter(
             x=df_bt.index, y=df_bt["QPM_Alpha"], name="QPM Alpha",
             line=dict(color=TEAL, width=2.5),
-            fill="tonexty", fillcolor="rgba(26,158,143,0.06)",
+            fill="tonexty", fillcolor="rgba(15,110,86,0.06)",
         ))
         for i, col in enumerate(bm_cols):
             fig.add_trace(go.Scatter(
@@ -181,11 +181,11 @@ def render(portfolio: Portfolio):
     else:
         invested_s = df_bt["Invested"]
         ret_kh = (df_bt["QPM_Alpha"] / invested_s - 1) * 100
-        fig.add_hline(y=0, line_color="rgba(26,158,143,0.25)", line_dash="dot", line_width=1)
+        fig.add_hline(y=0, line_color="rgba(15,110,86,0.25)", line_dash="dot", line_width=1)
         fig.add_trace(go.Scatter(
             x=df_bt.index, y=ret_kh, name="QPM Alpha",
             line=dict(color=TEAL, width=2.5),
-            fill="tozeroy", fillcolor="rgba(26,158,143,0.07)",
+            fill="tozeroy", fillcolor="rgba(15,110,86,0.07)",
         ))
         for i, col in enumerate(bm_cols):
             ret_bm = (df_bt[col] / invested_s - 1) * 100
@@ -194,21 +194,21 @@ def render(portfolio: Portfolio):
                 name=BENCHMARKS.get(col, col),
                 line=dict(color=bm_colors[i % len(bm_colors)], width=1.8, dash="dash"),
             ))
-        lay["yaxis"].update(ticksuffix="%", zeroline=True, zerolinecolor="rgba(26,158,143,0.2)")
+        lay["yaxis"].update(ticksuffix="%", zeroline=True, zerolinecolor="rgba(15,110,86,0.2)")
         lay["title"]["text"] = "포트폴리오 성과 비교 (누적 수익률)"
 
     lay.update(dict(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(255,255,255,0.6)",
         xaxis=dict(
-            gridcolor="rgba(26,158,143,0.06)", showgrid=False,
+            gridcolor="rgba(15,110,86,0.06)", showgrid=False,
             tickfont=dict(color=TICK_COLOR, size=10), tickangle=-25,
         ),
-        yaxis=dict(gridcolor="rgba(26,158,143,0.08)", tickfont=dict(color=TICK_COLOR, size=10)),
+        yaxis=dict(gridcolor="rgba(15,110,86,0.08)", tickfont=dict(color=TICK_COLOR, size=10)),
         legend=dict(
             orientation="h", yanchor="top", y=-0.14, xanchor="center", x=0.5,
             bgcolor="rgba(255,255,255,0.85)",
-            bordercolor="rgba(26,158,143,0.15)", borderwidth=0.5,
+            bordercolor="rgba(15,110,86,0.15)", borderwidth=0.5,
             font=dict(color=FONT_COLOR, size=11),
         ),
         margin=dict(t=44, b=90, l=60, r=16),
