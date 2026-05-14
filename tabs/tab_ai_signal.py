@@ -814,5 +814,4 @@ render();
 """
     n = len(signals)
     height = max(500, n * 110 + 200)
-    import streamlit.components.v1 as _cmp
-    _cmp.html(html, height=height, scrolling=True)
+    st.components.v1.html(html, height=height, scrolling=True)
