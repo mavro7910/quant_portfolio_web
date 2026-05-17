@@ -8,7 +8,8 @@ import streamlit as st
 from core.portfolio import Portfolio
 from core.strategy import (
     fetch_prices, fetch_market_caps,
-    MOMENTUM_WEIGHTS, MCAP_PRESETS, VOL_WINDOW, MA_WINDOW,
+    MCAP_PRESETS, MA_WINDOW,
+    momentum_score, vol_inv_zscore, _mcap_zscore,
 )
 from utils.ui import section_title, banner, metric_card, badge, TEAL, TEAL_DARK, TEAL_LIGHT, TEXT, TEXT_SUB, TEXT_MUTED, BORDER, SURFACE
 from utils.plotly_theme import TEAL, FONT_COLOR, TICK_COLOR
@@ -97,31 +98,18 @@ def _run_sell_analysis(portfolio, top_n_sell, mcap_preset: str):
 
             mcap_z_full = pd.Series(0.0, index=prices6.columns)
             if gamma > 0 and mcap_series is not None:
-                mc = mcap_series.reindex(prices6.columns).fillna(0)
-                if mc.sum() > 1e-8:
-                    sig = float(mc.std())
-                    if sig > 1e-8:
-                        mcap_z_full = ((mc - mc.mean()) / sig).clip(-3, 3)
+                mcap_z_full = _mcap_zscore(mcap_series, prices6.columns)
 
             for date in trading_days:
                 loc       = prices6.index.get_loc(date)
                 start_loc = max(0, loc - 252)
-                sub       = prices6.iloc[start_loc: loc + 1]
+                sub       = prices6.iloc[start_loc: loc + 1].ffill()
                 if len(sub) < 22:
                     continue
 
-                mom     = pd.Series(0.0, index=sub.columns)
-                total_w = 0.0
-                for days, w in MOMENTUM_WEIGHTS.items():
-                    if len(sub) <= days: continue
-                    ret = sub.pct_change(days).iloc[-1].fillna(0)
-                    mom += w * ret.rank(pct=True)
-                    total_w += w
-                if total_w > 0: mom /= total_w
-
-                vol      = sub.pct_change().rolling(VOL_WINDOW).std().iloc[-1]
-                inv      = (1 / vol.replace(0, np.nan)).fillna(0)
-                vol_rank = inv.rank(pct=True) if inv.sum() > 0 else pd.Series(1.0 / len(sub.columns), index=sub.columns)
+                # ── strategy.py target_weights와 동일한 Z-score 방식 ──
+                mom     = momentum_score(sub)       # Z-score 가중합 (AQR 방식)
+                vol_z   = vol_inv_zscore(sub)       # Z-score 정규화
 
                 if qqq6 is not None and len(qqq6) > loc:
                     qqq_sub  = qqq6.iloc[start_loc: loc + 1]
@@ -131,16 +119,13 @@ def _run_sell_analysis(portfolio, top_n_sell, mcap_preset: str):
 
                 m_w6 = 0.7 if is_bull6 else 0.4
                 v_w6 = 0.3 if is_bull6 else 0.6
-                alpha = (mom ** (2.0 if is_bull6 else 1.2)) * m_w6 + (vol_rank ** 1.5) * v_w6
+                alpha = mom * m_w6 + vol_z * v_w6   # 선형 가중합 (strategy.py와 동일)
 
                 if gamma > 0:
-                    mcap_z      = mcap_z_full.reindex(sub.columns).fillna(0)
-                    mcap_z_norm = mcap_z - mcap_z.min()
-                    _denom      = mcap_z_norm.max()
-                    if _denom > 1e-8: mcap_z_norm = mcap_z_norm / _denom
-                    alpha = alpha * (1.0 - gamma) + mcap_z_norm * gamma
+                    mcap_z = mcap_z_full.reindex(sub.columns).fillna(0)
+                    alpha  = alpha * (1.0 - gamma) + mcap_z * gamma   # raw Z-score 혼합
 
-                combined    = alpha / alpha.sum() if alpha.sum() > 0 else alpha
+                combined = alpha.clip(lower=0)      # ReLU (strategy.py와 동일)
                 daily_ranks[date] = combined.rank(ascending=False, method="min").astype(int)
 
             if not daily_ranks:
