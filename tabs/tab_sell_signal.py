@@ -125,8 +125,9 @@ def _run_sell_analysis(portfolio, top_n_sell, mcap_preset: str):
                     mcap_z = mcap_z_full.reindex(sub.columns).fillna(0)
                     alpha  = alpha * (1.0 - gamma) + mcap_z * gamma   # raw Z-score 혼합
 
-                combined = alpha.clip(lower=0)      # ReLU (strategy.py와 동일)
-                daily_ranks[date] = combined.rank(ascending=False, method="min").astype(int)
+                # 랭킹용으로는 ReLU 미적용 — 음수 alpha 종목도 순위 분리 필요
+                # (target_weights의 clip(lower=0)은 비중 계산 전용)
+                daily_ranks[date] = alpha.rank(ascending=False, method="min").astype(int)
 
             if not daily_ranks:
                 st.error("랭킹을 계산할 수 있는 거래일이 부족합니다.")
