@@ -172,8 +172,9 @@ def _render_sell_result(portfolio, top_n_sell):
             unsafe_allow_html=True,
         )
 
-    sell_candidates  = in_top_n[in_top_n == 0].index.tolist()
-    watch_candidates = in_top_n[(in_top_n > 0) & (in_top_n < total_days * 0.5)].index.tolist()
+    holdings        = portfolio.holdings
+    sell_candidates  = in_top_n[(in_top_n == 0) & (in_top_n.index.map(lambda t: holdings.get(t, 0) > 0))].index.tolist()
+    watch_candidates = in_top_n[(in_top_n > 0) & (in_top_n < total_days * 0.5) & (in_top_n.index.map(lambda t: holdings.get(t, 0) > 0))].index.tolist()
 
     st.markdown(f"""
 <div class="qpm-sell-summary">
