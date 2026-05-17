@@ -11,12 +11,12 @@ PURPLE     = "#8b72c8"
 GREEN      = "#5ab87a"
 GRAY       = "#a0b4b2"
 
-BG_PAPER   = "rgba(244,251,250,0)"   # transparent — 앱 배경과 자연스럽게 합성
-BG_PLOT    = "rgba(255,255,255,0.7)"
-GRID_COLOR = "rgba(15,110,86,0.08)"
-TICK_COLOR = "#7aada8"
-FONT_COLOR = "#2a3a38"
-LEGEND_BG  = "rgba(255,255,255,0.85)"
+BG_PAPER   = "rgba(0,0,0,0)"         # 완전 투명 — 다크/라이트 모드 자동 적응
+BG_PLOT    = "rgba(0,0,0,0)"         # 완전 투명 — 흰 박스 간섭 제거
+GRID_COLOR = "rgba(15,110,86,0.15)"
+TICK_COLOR = "#7aada8"               # 틸트 중간색 — 다크/라이트 모두 가독성 OK
+FONT_COLOR = "#9cb8b4"               # 연한 틸트 — 다크모드 배경에서도 보임
+LEGEND_BG  = "rgba(0,0,0,0)"
 
 LINE_COLORS = [TEAL, BLUE, AMBER, RED, PURPLE, GREEN]
 
@@ -36,8 +36,8 @@ def base_layout(title: str = "", height: int = 480) -> dict:
         margin=dict(t=44, b=50, l=58, r=16),
         hovermode="x unified",
         hoverlabel=dict(
-            bgcolor="rgba(255,255,255,0.95)",
-            font_color=FONT_COLOR,
+            bgcolor="rgba(15,110,86,0.9)",
+            font_color="#ffffff",
             font_size=11,
             bordercolor=TEAL,
         ),
@@ -56,7 +56,7 @@ def base_layout(title: str = "", height: int = 480) -> dict:
         ),
         legend=dict(
             orientation="h",
-            yanchor="bottom", y=1.04,
+            yanchor="bottom", y=1.02,
             xanchor="right", x=1,
             bgcolor="rgba(0,0,0,0)",
             bordercolor="rgba(0,0,0,0)",

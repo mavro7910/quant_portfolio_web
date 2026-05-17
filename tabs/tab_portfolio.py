@@ -355,8 +355,10 @@ def render(portfolio: Portfolio):
         name_str  = names_map.get(t, "")
         price_str = f"${p:,.2f}" if p else "—"
         val_str   = f"₩{val:,.0f}" if val else "—"
+        yf_url    = f"https://finance.yahoo.com/quote/{t}/"
         return f"""
-<div class="qpm-stock-row">
+<a href="{yf_url}" target="_blank" rel="noopener noreferrer" style="text-decoration:none;color:inherit;display:block">
+<div class="qpm-stock-row" style="cursor:pointer">
   {logo_html}
   <div style="flex:1;min-width:0">
     <div class="qpm-stock-ticker">{t}</div>
@@ -366,7 +368,9 @@ def render(portfolio: Portfolio):
     <div class="qpm-stock-price-main">{price_str}</div>
     <div class="qpm-stock-value">{val_str}</div>
   </div>
-</div>"""
+  <div style="margin-left:8px;opacity:0.35;font-size:0.8rem;align-self:center">↗</div>
+</div>
+</a>"""
 
     items_html = "".join(_stock_item_html(i, t, s) for i, (t, s) in enumerate(visible))
 

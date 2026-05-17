@@ -188,16 +188,17 @@ def render(portfolio: Portfolio):
         labels=tickers_r, values=pie_values, hole=0.48,
         textinfo="percent", texttemplate="%{percent:.1%}", textposition="inside",
         insidetextorientation="radial",
+        insidetextfont=dict(color="#ffffff", size=11),   # 흰색 고정 — 다크/라이트 모두 가독
         marker=dict(colors=_colors[:len(tickers_r)],
-                    line=dict(color="rgba(255,255,255,0.7)", width=1.5)),
+                    line=dict(color="rgba(255,255,255,0.5)", width=1.5)),
         hovertemplate="<b>%{label}</b><br>%{percent:.1%}<extra></extra>",
     ))
     fig_pie.update_layout(dict(
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=30,b=10,l=10,r=10), height=320,
-        font=dict(color=TEXT, size=11), showlegend=True,
+        font=dict(color="#9cb8b4", size=11), showlegend=True,
         legend=dict(orientation="v", x=1.02, y=0.5,
-                    font=dict(color=TEXT, size=11), bgcolor="rgba(0,0,0,0)"),
-        title=dict(text="목표 비중", font=dict(color=TEXT_SUB, size=12), x=0.01),
+                    font=dict(color="#9cb8b4", size=11), bgcolor="rgba(0,0,0,0)"),
+        title=dict(text="목표 비중", font=dict(color="#7aada8", size=12), x=0.01),
     ))
     st.plotly_chart(fig_pie, width="stretch", key="pie_chart")

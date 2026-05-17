@@ -199,19 +199,21 @@ def render(portfolio: Portfolio):
 
     lay.update(dict(
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(255,255,255,0.6)",
+        plot_bgcolor="rgba(0,0,0,0)",
         xaxis=dict(
-            gridcolor="rgba(15,110,86,0.06)", showgrid=False,
+            gridcolor="rgba(15,110,86,0.12)", showgrid=False,
             tickfont=dict(color=TICK_COLOR, size=10), tickangle=-25,
         ),
-        yaxis=dict(gridcolor="rgba(15,110,86,0.08)", tickfont=dict(color=TICK_COLOR, size=10)),
+        yaxis=dict(gridcolor="rgba(15,110,86,0.15)", tickfont=dict(color=TICK_COLOR, size=10)),
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1,
+            orientation="h",
+            yanchor="top", y=-0.18,       # 차트 아래에 배치 → 모바일에서 잘림 없음
+            xanchor="center", x=0.5,
             bgcolor="rgba(0,0,0,0)",
             bordercolor="rgba(0,0,0,0)", borderwidth=0,
             font=dict(color=FONT_COLOR, size=11),
         ),
-        margin=dict(t=82, b=48, l=60, r=16),
+        margin=dict(t=60, b=90, l=60, r=16),  # 아래 여백 확보 (레전드 공간)
     ))
     fig.update_layout(lay)
     st.plotly_chart(fig, width="stretch", key="bt_chart")
