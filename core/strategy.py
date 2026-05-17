@@ -202,7 +202,6 @@ def xirr(dates: list, cashflows: list[float]) -> float:
 
 def calc_xirr_from_backtest(
     df_bt: pd.DataFrame,
-    weekly_budget: int,
     col: str = "QPM_Alpha",
 ) -> float:
     """

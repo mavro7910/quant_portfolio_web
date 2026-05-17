@@ -37,9 +37,13 @@ def render(portfolio: Portfolio):
         tickers_r    = buy_res["tickers"]
         weights      = buy_res["weights"]
         weight_parts = ", ".join(f"{t} {weights.get(t,0)*100:.1f}%" for t in tickers_r)
+        # Fix4: bt_result가 캐시돼 있으면 실제 실행 당시 설정을 표시 (stale 방지)
+        _bt_cached = st.session_state.get("bt_result_meta", {})
+        _display_mcap = _PRESET_LABELS.get(_bt_cached.get("mcap_preset", mcap_preset), mcap_label)
+        _display_n    = _bt_cached.get("top_n", n_tickers)
         with st.expander("📌 매수 추천 탭 설정 반영 중", expanded=False):
             st.markdown(banner(
-                f"<b>시총 반영:</b> {mcap_label} · <b>Top N:</b> {n_tickers}<br>"
+                f"<b>시총 반영:</b> {_display_mcap} · <b>Top N:</b> {_display_n}<br>"
                 f"<b>종목 비중:</b> {weight_parts}", "info"
             ), unsafe_allow_html=True)
 
@@ -134,6 +138,10 @@ def render(portfolio: Portfolio):
                         sim_start=sim_start_date,
                     )
                 st.session_state["bt_result"] = df_bt
+                st.session_state["bt_result_meta"] = {
+                    "mcap_preset": mcap_preset,
+                    "top_n": n_tickers,
+                }
                 progress_bar.progress(100)
                 status_text.caption("✅ 완료!")
             except Exception as e:
@@ -179,7 +187,7 @@ def render(portfolio: Portfolio):
         lay["yaxis"].update(tickformat=",.0f", tickprefix="₩", exponentformat="none")
         lay["title"]["text"] = "포트폴리오 성과 비교 (평가금액)"
     else:
-        invested_s = df_bt["Invested"]
+        invested_s = df_bt["Invested"].replace(0, float("nan"))  # Fix1: 0→NaN으로 div 방어
         ret_kh = (df_bt["QPM_Alpha"] / invested_s - 1) * 100
         fig.add_hline(y=0, line_color="rgba(15,110,86,0.25)", line_dash="dot", line_width=1)
         fig.add_trace(go.Scatter(
@@ -199,21 +207,19 @@ def render(portfolio: Portfolio):
 
     lay.update(dict(
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(255,255,255,0.6)",
         xaxis=dict(
-            gridcolor="rgba(15,110,86,0.12)", showgrid=False,
+            gridcolor="rgba(15,110,86,0.06)", showgrid=False,
             tickfont=dict(color=TICK_COLOR, size=10), tickangle=-25,
         ),
-        yaxis=dict(gridcolor="rgba(15,110,86,0.15)", tickfont=dict(color=TICK_COLOR, size=10)),
+        yaxis=dict(gridcolor="rgba(15,110,86,0.08)", tickfont=dict(color=TICK_COLOR, size=10)),
         legend=dict(
-            orientation="h",
-            yanchor="top", y=-0.18,       # 차트 아래에 배치 → 모바일에서 잘림 없음
-            xanchor="center", x=0.5,
+            orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1,
             bgcolor="rgba(0,0,0,0)",
             bordercolor="rgba(0,0,0,0)", borderwidth=0,
             font=dict(color=FONT_COLOR, size=11),
         ),
-        margin=dict(t=60, b=90, l=60, r=16),  # 아래 여백 확보 (레전드 공간)
+        margin=dict(t=82, b=48, l=60, r=16),
     ))
     fig.update_layout(lay)
     st.plotly_chart(fig, width="stretch", key="bt_chart")
@@ -227,7 +233,7 @@ def render(portfolio: Portfolio):
     for col in ["QPM_Alpha"] + bm_cols:
         final   = df_bt[col].iloc[-1]
         ret_pct = (final / invested_final - 1) * 100 if invested_final > 0 else 0.0
-        xirr_val = calc_xirr_from_backtest(df_bt, portfolio.weekly_budget, col=col)
+        xirr_val = calc_xirr_from_backtest(df_bt, col=col)
         xirr_pct = xirr_val * 100 if not np.isnan(xirr_val) else None
         running_max = df_bt[col].cummax()
         mdd = ((running_max - df_bt[col]) / running_max.replace(0, np.nan)).max() * 100

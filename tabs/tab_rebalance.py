@@ -182,6 +182,13 @@ def render(portfolio: Portfolio):
         })
 
     st.markdown(section_title("종목별 리밸런싱 내역"), unsafe_allow_html=True)
+    _zero_target = [r["티커"] for r in rows_rb if r["목표 비중 (%)"] == 0 and r["보유 수량"] > 0]
+    if _zero_target:
+        st.markdown(
+            banner(f"⚠️ <b>목표 비중 0% 종목</b> ({', '.join(_zero_target)}): "
+                   f"Top {rb_top_n} 밖으로 팩터 점수가 낮아 전량 매도가 권고됩니다.", "warn"),
+            unsafe_allow_html=True,
+        )
     st.dataframe(
         pd.DataFrame(rows_rb),
         column_config={
