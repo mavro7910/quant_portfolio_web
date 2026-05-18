@@ -9,6 +9,7 @@ Cloud 실행 → Supabase DB 저장/로드 (영구 보존)
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 from pathlib import Path
@@ -29,6 +30,10 @@ def _get_supabase():
         return create_client(url, key)
     except Exception:
         return None
+
+
+def _default_data() -> dict:
+    return copy.deepcopy(_DEFAULTS)
 
 
 # ─────────────────────────────────────────────
@@ -92,7 +97,7 @@ class Portfolio:
                 return res.data[0]["data"]
         except Exception as e:
             st.warning(f"Supabase 로드 실패, 기본값 사용: {e}")
-        return dict(_DEFAULTS)
+        return _default_data()
 
     def _load_local(self) -> dict:
         if self.path.exists():
@@ -101,7 +106,7 @@ class Portfolio:
                     return json.load(f)
             except Exception:
                 pass
-        return dict(_DEFAULTS)
+        return _default_data()
 
     def save(self):
         """Supabase 우선, 없으면 로컬 파일에 저장."""
@@ -155,11 +160,45 @@ class Portfolio:
     def tickers(self) -> list:
         return list(self.holdings.keys())
 
-    def set_holding(self, ticker: str, shares: float):
+    def set_holding(self, ticker: str, shares: float, asset_type: str | None = None):
+        ticker = ticker.upper().strip()
         self._data.setdefault("holdings", {})[ticker] = shares
+        if asset_type is not None:
+            self.set_asset_type(ticker, asset_type)
 
     def remove_holding(self, ticker: str):
+        ticker = ticker.upper().strip()
         self._data.setdefault("holdings", {}).pop(ticker, None)
+        self._data.setdefault("asset_types", {}).pop(ticker, None)
+        self._data.setdefault("logos", {}).pop(ticker, None)
+
+    @property
+    def asset_types(self) -> dict:
+        return self._data.setdefault("asset_types", {})
+
+    def asset_type(self, ticker: str) -> str:
+        value = self.asset_types.get(ticker.upper().strip(), "STOCK")
+        return "ETF" if str(value).upper() == "ETF" else "STOCK"
+
+    def set_asset_type(self, ticker: str, asset_type: str):
+        ticker = ticker.upper().strip()
+        normalized = "ETF" if str(asset_type).upper() == "ETF" else "STOCK"
+        if normalized == "STOCK":
+            self.asset_types.pop(ticker, None)
+        else:
+            self.asset_types[ticker] = normalized
+
+    def is_etf(self, ticker: str) -> bool:
+        return self.asset_type(ticker) == "ETF"
+
+    def strategy_tickers(self) -> list:
+        return [t for t in self.tickers() if not self.is_etf(t)]
+
+    def strategy_holdings(self) -> dict:
+        return {t: s for t, s in self.holdings.items() if not self.is_etf(t)}
+
+    def etf_tickers(self) -> list:
+        return [t for t in self.tickers() if self.is_etf(t)]
 
     # ── 설정값 ────────────────────────────────────────────────────
 

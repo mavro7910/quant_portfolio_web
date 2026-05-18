@@ -27,6 +27,10 @@ def safe_get(obj, key, default=0.0):
 
 
 def render(portfolio: Portfolio):
+    strategy_holdings = portfolio.strategy_holdings()
+    strategy_tickers = list(strategy_holdings.keys())
+    etf_count = len(portfolio.etf_tickers())
+
     col_b, col_m, col_run = st.columns([2.5, 2, 1.5])
     with col_b:
         budget = st.number_input("투자 금액 (KRW)", min_value=10_000, max_value=100_000_000,
@@ -43,7 +47,7 @@ def render(portfolio: Portfolio):
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_buy = st.button("▶ 매수 추천 실행", key="btn_buy", type="primary")
 
-    _max_n    = len(portfolio.tickers()) if portfolio.tickers() else 20
+    _max_n    = len(strategy_tickers) if strategy_tickers else 20
     _saved_n  = portfolio.get_setting("top_n", 10)
     n_tickers = st.number_input("추천 종목 수", min_value=1, max_value=_max_n,
                                 value=min(_saved_n,_max_n), step=1,
@@ -56,8 +60,11 @@ def render(portfolio: Portfolio):
             "<b>③ 국면별 가중합</b> — 강세장: 모멘텀 70% + 변동성역수 30% / 약세장: 40%+60%<br>"
             "<b>④ ReLU → 정규화 → 25% 캡</b>", "info"), unsafe_allow_html=True)
 
+    if etf_count:
+        st.caption(f"ETF {etf_count}개는 QPM 매수 추천 계산에서 제외됩니다.")
+
     if run_buy:
-        if not portfolio.tickers():
+        if not strategy_tickers:
             st.error("포트폴리오 탭에서 종목을 먼저 입력하세요.")
         else:
             portfolio.weekly_budget = budget
@@ -66,7 +73,7 @@ def render(portfolio: Portfolio):
             portfolio.save()
             with st.spinner("시장 데이터 수집 및 팩터 계산 중..."):
                 try:
-                    res = buy_recommendation(holdings=portfolio.holdings, budget_krw=budget,
+                    res = buy_recommendation(holdings=strategy_holdings, budget_krw=budget,
                                              mcap_preset=mcap_preset, top_n=int(n_tickers))
                     st.session_state["buy_result"] = res
                 except Exception as e:
@@ -105,7 +112,7 @@ def render(portfolio: Portfolio):
   {metric_card("시장 국면", regime_text, f'{"QQQ > MA200" if is_bull else "QQQ < MA200"}', "#0F6E56" if is_bull else "#e05252")}
   {metric_card("시총 반영", _PRESET_LABELS.get(mcap_pname,mcap_pname), _PRESET_DESC.get(mcap_pname,""))}
   {metric_card("USD / KRW", f"{fx:,.0f}", "추정값" if fx_est else "실시간")}
-  {metric_card("포트폴리오 총액", f"${total_usd:,.0f}", "현재가 기준")}
+  {metric_card("QPM 대상 총액", f"${total_usd:,.0f}", "ETF 제외")}
 </div>
 """, unsafe_allow_html=True)
 

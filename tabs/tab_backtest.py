@@ -29,6 +29,8 @@ def render(portfolio: Portfolio):
     mcap_preset = portfolio.get_setting("mcap_preset", "balanced")
     n_tickers   = portfolio.get_setting("top_n", 10)
     buy_res     = st.session_state.get("buy_result")
+    strategy_tickers = portfolio.strategy_tickers()
+    etf_count = len(portfolio.etf_tickers())
 
     _PRESET_LABELS = {"factor": "순수 팩터", "balanced": "균형", "mcap": "시총 편향"}
     mcap_label = _PRESET_LABELS.get(mcap_preset, mcap_preset)
@@ -91,12 +93,14 @@ def render(portfolio: Portfolio):
         )
 
     st.caption(
-        f"📌 주간 투자금: ₩{portfolio.weekly_budget:,} · 종목 {len(portfolio.holdings)}개 · "
+        f"📌 주간 투자금: ₩{portfolio.weekly_budget:,} · QPM 대상 {len(strategy_tickers)}개 · "
         f"Top {n_tickers} · {mcap_label}"
     )
+    if etf_count:
+        st.caption(f"ETF {etf_count}개는 백테스트 계산에서 제외됩니다.")
 
     if run_bt:
-        if not portfolio.tickers():
+        if not strategy_tickers:
             st.error("포트폴리오 탭에서 종목을 먼저 추가하세요.")
         elif period_label == "직접 입력" and (
             custom_start is None or custom_end is None or custom_start >= custom_end
@@ -127,7 +131,7 @@ def render(portfolio: Portfolio):
             try:
                 with st.spinner("데이터 수집 중..."):
                     df_bt = run_backtest(
-                        portfolio.tickers(),
+                        strategy_tickers,
                         weekly_budget=portfolio.weekly_budget,
                         benchmark_tickers=bm_tickers,
                         period=period_str,

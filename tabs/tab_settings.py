@@ -32,7 +32,8 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
                                placeholder="QQQM, XLK, SPY")
     col_s3, _ = st.columns(2)
     with col_s3:
-        _max_n_cfg = len(portfolio.tickers()) if portfolio.tickers() else 20
+        _strategy_tickers_cfg = portfolio.strategy_tickers()
+        _max_n_cfg = len(_strategy_tickers_cfg) if _strategy_tickers_cfg else 20
         _saved_n   = portfolio.get_setting("top_n", 10)
         new_top_n  = st.number_input("기본 추천 종목 수 (Top N)", min_value=1,
                                      max_value=_max_n_cfg, value=min(_saved_n,_max_n_cfg), step=1)

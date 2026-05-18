@@ -108,14 +108,20 @@ def render(portfolio: Portfolio, file_key: str):
                     else:
                         st.error("저장된 키가 없습니다. 설정 탭에서 등록하세요.")
 
-    if not portfolio.tickers():
+    strategy_holdings = portfolio.strategy_holdings()
+    strategy_tickers = list(strategy_holdings.keys())
+    etf_count = len(portfolio.etf_tickers())
+
+    if not strategy_tickers:
         st.markdown(
             '<div class="info-banner">📋 포트폴리오 탭에서 종목을 먼저 추가하세요.</div>',
             unsafe_allow_html=True,
         )
         return
+    if etf_count:
+        st.caption(f"ETF {etf_count}개는 AI 시그널 분석에서 제외됩니다.")
 
-    active_holdings = {t: s for t, s in portfolio.holdings.items() if s > 0}
+    active_holdings = {t: s for t, s in strategy_holdings.items() if s > 0}
     if not active_holdings:
         st.markdown(
             '<div class="warn-banner">⚠️ 보유 중인 종목이 없어요. 포트폴리오 탭에서 수량을 입력해주세요.</div>',
@@ -136,8 +142,6 @@ def render(portfolio: Portfolio, file_key: str):
         return
 
     cached = _get_cached(file_key)
-    ticker_count = len(portfolio.tickers())
-
     if cached:
         analyzed_count = len(cached)
         # 캐시된 데이터에서 날짜와 시간을 가져옴
@@ -152,7 +156,7 @@ def render(portfolio: Portfolio, file_key: str):
             unsafe_allow_html=True,
         )
     else:
-        active_count = len([t for t, s in portfolio.holdings.items() if s > 0])
+        active_count = len([t for t, s in strategy_holdings.items() if s > 0])
         st.markdown(
             f'<div class="info-banner">'
             f'📡 보유 수량이 있는 <b>{active_count}개 종목</b>의 최신 뉴스를 AI가 분석합니다.<br>'
@@ -209,7 +213,7 @@ def render(portfolio: Portfolio, file_key: str):
 
 def _run_analysis(portfolio: Portfolio, file_key: str, force_full: bool = False):
     api_key      = get_api_key()
-    holdings     = {t: s for t, s in portfolio.holdings.items() if s > 0}
+    holdings     = {t: s for t, s in portfolio.strategy_holdings().items() if s > 0}
     total        = len(holdings)
 
     # 스마트 캐시: 당일 기존 결과 로드 (강제 전체 재분석이 아닐 때)

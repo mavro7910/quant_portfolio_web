@@ -17,6 +17,10 @@ _PRESET_LABELS = {
 
 
 def render(portfolio: Portfolio):
+    strategy_holdings = portfolio.strategy_holdings()
+    strategy_tickers = list(strategy_holdings.keys())
+    etf_count = len(portfolio.etf_tickers())
+
     with st.expander("📅 리밸런싱이란?", expanded=False):
         st.markdown(banner(
             "시간이 지나면 종목별 수익률 차이로 인해 실제 비중이 목표 비중에서 벗어납니다.<br>"
@@ -24,9 +28,11 @@ def render(portfolio: Portfolio):
             "목표 비중으로 되돌리는 작업입니다.", "info"
         ), unsafe_allow_html=True)
 
-    if not portfolio.tickers():
+    if not strategy_tickers:
         st.info("포트폴리오 탭에서 종목을 먼저 추가하세요.")
         return
+    if etf_count:
+        st.caption(f"ETF {etf_count}개는 리밸런싱 계산에서 제외됩니다.")
 
     col_rb1, col_rb2, col_rb3 = st.columns([1.5, 1.5, 1.5])
     with col_rb1:
@@ -42,7 +48,7 @@ def render(portfolio: Portfolio):
             key="rb_mcap_preset",
         )
     with col_rb2:
-        _max_rebal     = len(portfolio.tickers())
+        _max_rebal     = len(strategy_tickers)
         _saved_rebal_n = portfolio.get_setting("rebal_top_n", 15)
         rb_top_n = st.number_input(
             "비중 산출 종목 수 (Top N)",
@@ -61,7 +67,7 @@ def render(portfolio: Portfolio):
         with st.spinner("시세 및 목표 비중 계산 중..."):
             try:
                 res_rb = rebalance_weights(
-                    holdings=portfolio.holdings,
+                    holdings=strategy_holdings,
                     mcap_preset=rb_mcap_preset,
                     top_n=int(rb_top_n),
                 )
@@ -78,12 +84,12 @@ def render(portfolio: Portfolio):
     fx_rb       = res_rb["fx_rate"]
     fx_est_rb   = res_rb.get("fx_estimated", False)
     is_bull_rb  = res_rb["is_bull"]
-    all_tickers = portfolio.tickers()
+    all_tickers = strategy_tickers
 
     if fx_est_rb:
         st.markdown(banner("⚠️ USD/KRW 환율 조회 실패 — 추정값 사용 중", "warn"), unsafe_allow_html=True)
 
-    holdings_rb   = portfolio.holdings
+    holdings_rb   = strategy_holdings
     total_val_usd = 0.0
     curr_val_usd  = {}
     for t in all_tickers:
@@ -104,8 +110,9 @@ def render(portfolio: Portfolio):
     <div class="qpm-rebal-sub">{"QQQ > MA200" if is_bull_rb else "QQQ < MA200"}</div>
   </div>
   <div class="qpm-rebal-card">
-    <div class="qpm-rebal-label">포트폴리오 총액</div>
+    <div class="qpm-rebal-label">QPM 대상 총액</div>
     <div class="qpm-rebal-value">₩{total_val_krw:,.0f}</div>
+    <div class="qpm-rebal-sub">ETF 제외</div>
   </div>
   <div class="qpm-rebal-card">
     <div class="qpm-rebal-label">USD/KRW</div>

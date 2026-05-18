@@ -97,7 +97,7 @@ def render(portfolio: Portfolio):
     def render_management(expanded: bool = False):
         with st.expander("종목 관리", expanded=expanded):
             with st.form("portfolio_add_form", clear_on_submit=False):
-                col_t, col_s = st.columns([1, 1])
+                col_t, col_s, col_kind = st.columns([1, 1, 0.8])
                 with col_t:
                     new_ticker = st.text_input("티커", placeholder="AAPL", key="inp_ticker").upper().strip()
                 with col_s:
@@ -110,11 +110,14 @@ def render(portfolio: Portfolio):
                         format="%.6f",
                         key="inp_shares",
                     )
+                with col_kind:
+                    st.markdown('<div style="height:1.7rem"></div>', unsafe_allow_html=True)
+                    new_is_etf = st.checkbox("ETF", key="inp_is_etf")
                 if st.form_submit_button("추가/수정", type="primary", width="stretch"):
                     if new_ticker:
-                        portfolio.set_holding(new_ticker, new_shares)
+                        portfolio.set_holding(new_ticker, new_shares, "ETF" if new_is_etf else "STOCK")
                         portfolio.save()
-                        inv("prices_data", "buy_result", "bt_result", "signal_cache")
+                        inv("prices_data", "buy_result", "bt_result", "rebal_result", "sell_result", "signal_cache")
                         st.success(f"{new_ticker} 저장 완료!")
                         st.rerun()
                     else:
@@ -127,7 +130,7 @@ def render(portfolio: Portfolio):
                     if del_ticker != "선택...":
                         portfolio.remove_holding(del_ticker)
                         portfolio.save()
-                        inv("prices_data", "buy_result", "bt_result", "signal_cache")
+                        inv("prices_data", "buy_result", "bt_result", "rebal_result", "sell_result", "signal_cache")
                         st.success(f"{del_ticker} 삭제 완료!")
                         st.rerun()
 
@@ -221,6 +224,8 @@ def render(portfolio: Portfolio):
 
     # ── 보유 종목 현황 ────────────────────────────────────
     holdings = portfolio.holdings
+    strategy_tickers = portfolio.strategy_tickers()
+    etf_tickers = portfolio.etf_tickers()
     if not holdings:
         st.markdown(banner("📋 보유 종목이 없습니다. 위에서 티커와 수량을 입력해 추가하세요.", "info"), unsafe_allow_html=True)
         render_management(expanded=True)
@@ -307,9 +312,9 @@ def render(portfolio: Portfolio):
 </div>
 <div class="qpm-metric-grid">
   {metric_card("보유 종목 수", f"{len(holdings)}개")}
+  {metric_card("QPM 분석 대상", f"{len(strategy_tickers)}개", f"ETF {len(etf_tickers)}개 제외")}
   {metric_card("총 평가금액 (USD)", f"${total_usd:,.2f}" if total_usd else "—", "현재가 기준")}
   {metric_card("USD / KRW", f"{fx:,.2f}", "실시간" if not fx_est else "추정값")}
-  {metric_card("마지막 갱신", "방금 전", "세션 기준")}
 </div>
 """, unsafe_allow_html=True)
     else:
@@ -321,9 +326,9 @@ def render(portfolio: Portfolio):
 </div>
 <div class="qpm-metric-grid">
   {metric_card("보유 종목 수", f"{len(holdings)}개")}
+  {metric_card("QPM 분석 대상", f"{len(strategy_tickers)}개", f"ETF {len(etf_tickers)}개 제외")}
   {metric_card("투자금", "—", "시세 갱신 필요")}
   {metric_card("USD / KRW", "—")}
-  {metric_card("마지막 갱신", "—")}
 </div>
 """, unsafe_allow_html=True)
 
@@ -353,6 +358,7 @@ def render(portfolio: Portfolio):
         color     = _ticker_color(t, idx)
         logo_html = _logo_or_abbr_html(t, portfolio.get_logo(t), color, "qpm-stock-icon")
         name_str  = names_map.get(t, "")
+        type_badge = " · ETF" if portfolio.is_etf(t) else ""
         price_str = f"${p:,.2f}" if p else "—"
         val_str   = f"₩{val:,.0f}" if val else "—"
         yf_url    = f"https://finance.yahoo.com/quote/{t}/"
@@ -362,7 +368,7 @@ def render(portfolio: Portfolio):
   {logo_html}
   <div style="flex:1;min-width:0">
     <div class="qpm-stock-ticker">{t}</div>
-    <div class="qpm-stock-shares">{s:.4f}주{" · " + name_str if name_str else ""}</div>
+    <div class="qpm-stock-shares">{s:.4f}주{" · " + name_str if name_str else ""}{type_badge}</div>
   </div>
   <div class="qpm-stock-price" style="text-align:right;flex-shrink:0">
     <div class="qpm-stock-price-main">{price_str}</div>
@@ -400,7 +406,7 @@ def render(portfolio: Portfolio):
     # ── 인터랙티브 수량 편집 테이블 ───────────────────────
     st.markdown(section_title("수량 직접 편집"), unsafe_allow_html=True)
     df_hold = pd.DataFrame([{
-        "티커": t, "보유 수량": s,
+        "티커": t, "자산 유형": portfolio.asset_type(t), "보유 수량": s,
         "현재가 (USD)": (float(prices_map[t]) if prices_map is not None and t in prices_map else None),
         "평가금액 (KRW)": (float(prices_map[t]) * s * (fx or 1) if prices_map is not None and t in prices_map else None),
     } for t, s in holdings.items()])
@@ -412,11 +418,12 @@ def render(portfolio: Portfolio):
     edited_df = st.data_editor(
         df_hold,
         column_config={
+            "자산 유형":       st.column_config.SelectboxColumn("자산 유형", options=["STOCK", "ETF"]),
             "현재가 (USD)":   st.column_config.NumberColumn(format="$%.2f"),
             "평가금액 (KRW)": st.column_config.NumberColumn(format="₩%.0f"),
             "보유 수량":      st.column_config.NumberColumn(format="%.6f"),
         },
-        disabled=[c for c in df_hold.columns if c != "보유 수량"],
+        disabled=[c for c in df_hold.columns if c not in ("보유 수량", "자산 유형")],
         width="stretch", hide_index=True,
         key=f"hold_editor_{_ticker_hash}",
     )
@@ -424,9 +431,13 @@ def render(portfolio: Portfolio):
     for _, row in edited_df.iterrows():
         t = row["티커"]
         new_s = float(row["보유 수량"])
+        new_type = str(row.get("자산 유형", "STOCK"))
         if abs(new_s - holdings.get(t, 0.0)) > 1e-9:
             portfolio.set_holding(t, new_s)
             changed = True
+        if new_type != portfolio.asset_type(t):
+            portfolio.set_asset_type(t, new_type)
+            changed = True
     if changed:
         portfolio.save()
-        inv("buy_result","bt_result","rebal_result","signal_cache")
+        inv("buy_result","bt_result","rebal_result","sell_result","signal_cache")

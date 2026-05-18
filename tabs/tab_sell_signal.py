@@ -22,6 +22,9 @@ _PRESET_LABELS = {
 
 
 def render(portfolio: Portfolio):
+    strategy_tickers = portfolio.strategy_tickers()
+    etf_count = len(portfolio.etf_tickers())
+
     with st.expander("📌 매도 신호란?", expanded=False):
         st.markdown(banner(
             "지난 1달(약 21 거래일) 동안 <b>매일</b> 종목별 랭킹을 계산하여 "
@@ -32,7 +35,7 @@ def render(portfolio: Portfolio):
 
     col_top, col_mcap6, col_run6 = st.columns([2, 2, 1.2])
     with col_top:
-        _ticker_count   = len(portfolio.tickers())
+        _ticker_count   = len(strategy_tickers)
         _max_sell       = max(_ticker_count, 1) if _ticker_count > 0 else 50
         _saved_sell_n   = portfolio.get_setting("sell_top_n", 15)
         _default_sell_n = max(1, min(_saved_sell_n, _max_sell))
@@ -58,8 +61,11 @@ def render(portfolio: Portfolio):
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_sell = st.button("🔍 분석 실행", key="btn_sell_signal", type="primary")
 
+    if etf_count:
+        st.caption(f"ETF {etf_count}개는 매도 시그널 계산에서 제외됩니다.")
+
     if run_sell:
-        if not portfolio.tickers():
+        if not strategy_tickers:
             st.error("포트폴리오 탭에서 종목을 먼저 입력하세요.")
         else:
             portfolio.set_setting("sell_top_n", int(top_n_sell))
@@ -72,7 +78,7 @@ def render(portfolio: Portfolio):
 
 
 def _run_sell_analysis(portfolio, top_n_sell, mcap_preset: str):
-    tickers_all = portfolio.tickers()
+    tickers_all = portfolio.strategy_tickers()
     for _k in ("mcap_cache6", "mcap_cache6_ok"):
         st.session_state.pop(_k, None)
 
@@ -164,7 +170,7 @@ def _render_sell_result(portfolio, top_n_sell):
     avg_rank    = sr["avg_rank"]
     latest_rank = sr["latest_rank"]
     rank_df     = sr["rank_df"]
-    tickers_all = portfolio.tickers()
+    tickers_all = portfolio.strategy_tickers()
 
     if mcap_preset != "factor" and not mcap_ok:
         st.markdown(
@@ -172,7 +178,7 @@ def _render_sell_result(portfolio, top_n_sell):
             unsafe_allow_html=True,
         )
 
-    holdings        = portfolio.holdings
+    holdings        = portfolio.strategy_holdings()
     sell_candidates  = in_top_n[(in_top_n == 0) & (in_top_n.index.map(lambda t: holdings.get(t, 0) > 0))].index.tolist()
     watch_candidates = in_top_n[(in_top_n > 0) & (in_top_n < total_days * 0.5) & (in_top_n.index.map(lambda t: holdings.get(t, 0) > 0))].index.tolist()
 
