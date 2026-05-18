@@ -18,6 +18,8 @@ _KR_TICKER_HINTS = {
     "tsmc(adr)":"TSM","tsmc":"TSM",
     "asml 홀딩(adr)":"ASML","asml홀딩(adr)":"ASML",
     "arm 홀딩스(adr)":"ARM","arm홀딩스(adr)":"ARM",
+    "마이크론 테크놀로지":"MU","마이크론테크놀로지":"MU","마이크론":"MU",
+    "micron technology":"MU","micron":"MU",
     "kla":"KLAC",
 }
 
@@ -102,11 +104,14 @@ def _map_to_tickers(items, universe, api_key, ticker_names):
     map_dict = {m["name_kr"]: m.get("ticker") for m in mapping}
     result = []
     for item in items:
-        ticker = (map_dict.get(item.get("name_kr")) or item.get("ticker_guess") or "").upper().strip()
+        name = item.get("name_kr", "")
+        normalized_name = re.sub(r"\s+", "", name.lower())
+        hinted = _KR_TICKER_HINTS.get(name.lower()) or _KR_TICKER_HINTS.get(normalized_name)
+        ticker = (hinted or map_dict.get(name) or item.get("ticker_guess") or "").upper().strip()
         if ticker and re.match(r"^[A-Z][A-Z0-9.-]{0,9}$", ticker):
             result.append({
                 "ticker": ticker,
-                "name_kr": item.get("name_kr", ""),
+                "name_kr": name,
                 "shares": item["shares"],
                 "asset_type": item.get("asset_type", "STOCK"),
             })
