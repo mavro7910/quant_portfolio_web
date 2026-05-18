@@ -21,6 +21,10 @@ _KR_TICKER_HINTS = {
     "kla":"KLAC",
 }
 
+_KNOWN_ETF_TICKERS = {
+    "DIA", "IWM", "QQQ", "QQQM", "SPY", "VGT", "VOO", "VTI", "XLK", "XOVR",
+}
+
 _TICKER_COLORS = {
     "AAPL":"#555","MSFT":"#0078d4","NVDA":"#76b900","AMZN":"#ff9900",
     "GOOGL":"#4285f4","META":"#1877f2","TSLA":"#cc0000","AVGO":TEAL,
@@ -53,7 +57,12 @@ def _logo_or_abbr_html(ticker: str, logo_url: str | None, color: str, class_name
 def _extract_names_and_shares(uploaded_files, api_key):
     import google.generativeai as genai
     genai.configure(api_key=api_key)
-    prompt = '이미지에서 "숫자주" 패턴을 모두 찾고 각 수량 바로 위의 종목명과 쌍으로 추출.\nJSON만 응답:\n[{"name_kr":"브로드컴","shares":0.284328},...]'
+    prompt = (
+        '이미지에서 "숫자주" 패턴을 모두 찾고 각 수량 바로 위의 종목명/티커와 쌍으로 추출.\n'
+        '티커가 화면에 보이면 ticker_guess에 넣고, ETF/펀드로 보이면 asset_type을 "ETF"로 표시.\n'
+        'JSON만 응답:\n'
+        '[{"name_kr":"브로드컴","ticker_guess":"AVGO","shares":0.284328,"asset_type":"STOCK"},...]'
+    )
     model = genai.GenerativeModel("gemini-2.5-flash-lite")
     parts = []
     for f in uploaded_files:
@@ -74,8 +83,18 @@ def _map_to_tickers(items, universe, api_key, ticker_names):
         eng = (ticker_names or {}).get(t, "")
         universe_lines.append(f"  {t}: {eng}" if eng else f"  {t}")
     hints_str = "\n".join(f"  {k} -> {v}" for k, v in _KR_TICKER_HINTS.items())
-    names_str = "\n".join(f"  {i+1}. {item['name_kr']}" for i, item in enumerate(items))
-    prompt = f"아래 한글 종목명을 포트폴리오 티커로 매핑하세요.\n\n[티커 목록]\n{chr(10).join(universe_lines)}\n\n[힌트]\n{hints_str}\n\n[매핑할 종목명]\n{names_str}\n\nJSON만:\n[{{\"name_kr\":\"브로드컴\",\"ticker\":\"AVGO\"}},...]"
+    names_str = "\n".join(
+        f"  {i+1}. name={item.get('name_kr','')}, ticker_guess={item.get('ticker_guess','')}"
+        for i, item in enumerate(items)
+    )
+    prompt = (
+        "아래 종목명/티커 후보를 미국 상장 티커로 매핑하세요. "
+        "포트폴리오 티커 목록은 힌트일 뿐이며, 목록에 없는 새 티커도 보이면 그대로 반환하세요.\n\n"
+        f"[현재 포트폴리오 티커]\n{chr(10).join(universe_lines)}\n\n"
+        f"[힌트]\n{hints_str}\n\n"
+        f"[매핑할 종목]\n{names_str}\n\n"
+        'JSON만:\n[{"name_kr":"브로드컴","ticker":"AVGO"},...]'
+    )
     model = genai.GenerativeModel("gemini-2.5-flash")
     response = model.generate_content(prompt)
     raw = re.sub(r"```(?:json)?", "", response.text.strip()).strip().rstrip("`").strip()
@@ -83,10 +102,22 @@ def _map_to_tickers(items, universe, api_key, ticker_names):
     map_dict = {m["name_kr"]: m.get("ticker") for m in mapping}
     result = []
     for item in items:
-        ticker = map_dict.get(item["name_kr"])
-        if ticker and ticker.upper() in universe:
-            result.append({"ticker": ticker.upper(), "name_kr": item["name_kr"], "shares": item["shares"]})
+        ticker = (map_dict.get(item.get("name_kr")) or item.get("ticker_guess") or "").upper().strip()
+        if ticker and re.match(r"^[A-Z][A-Z0-9.-]{0,9}$", ticker):
+            result.append({
+                "ticker": ticker,
+                "name_kr": item.get("name_kr", ""),
+                "shares": item["shares"],
+                "asset_type": item.get("asset_type", "STOCK"),
+            })
     return result
+
+
+def _default_asset_type(ticker: str, name: str = "", raw_type: str = "STOCK") -> str:
+    text = f"{ticker} {name} {raw_type}".upper()
+    if raw_type.upper() == "ETF" or ticker.upper() in _KNOWN_ETF_TICKERS or "ETF" in text:
+        return "ETF"
+    return "STOCK"
 
 
 def render(portfolio: Portfolio):
@@ -191,6 +222,13 @@ def render(portfolio: Portfolio):
                 df_preview = pd.DataFrame([{
                     "티커": item.get("ticker", ""),
                     "한글명": item.get("name_kr", ""),
+                    "자산 유형": portfolio.asset_type(item.get("ticker", ""))
+                    if item.get("ticker", "") in portfolio.holdings
+                    else _default_asset_type(
+                        item.get("ticker", ""),
+                        item.get("name_kr", ""),
+                        item.get("asset_type", "STOCK"),
+                    ),
                     "추출 수량": float(item.get("shares", 0.0)),
                     "현재 수량": portfolio.holdings.get(item.get("ticker", ""), 0.0),
                 } for item in extracted])
@@ -199,6 +237,7 @@ def render(portfolio: Portfolio):
                     column_config={
                         "티커": st.column_config.TextColumn("티커"),
                         "한글명": st.column_config.TextColumn("한글명", disabled=True),
+                        "자산 유형": st.column_config.SelectboxColumn("자산 유형", options=["STOCK", "ETF"]),
                         "추출 수량": st.column_config.NumberColumn("추출 수량", format="%.6f"),
                         "현재 수량": st.column_config.NumberColumn("현재 수량 (기존)", format="%.6f", disabled=True),
                     },
@@ -219,7 +258,7 @@ def render(portfolio: Portfolio):
                         for _, row in edited.iterrows():
                             t = str(row["티커"]).upper().strip()
                             if t:
-                                portfolio.set_holding(t, float(row["추출 수량"]))
+                                portfolio.set_holding(t, float(row["추출 수량"]), str(row.get("자산 유형", "STOCK")))
                                 applied.add(t)
                         zeroed = []
                         for t in list(portfolio.holdings.keys()):
@@ -227,7 +266,7 @@ def render(portfolio: Portfolio):
                                 portfolio.set_holding(t, 0.0)
                                 zeroed.append(t)
                         portfolio.save()
-                        inv("prices_data", "buy_result", "bt_result", "rebal_result", "signal_cache")
+                        inv("prices_data", "buy_result", "bt_result", "rebal_result", "sell_result", "signal_cache")
                         del st.session_state["img_extracted"]
                         msg = f"{len(applied)}개 종목 업데이트"
                         if zeroed:
