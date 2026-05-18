@@ -124,6 +124,23 @@ def render(portfolio: Portfolio):
                         st.error("티커를 입력하세요.")
 
             tickers_list = portfolio.tickers()
+            if tickers_list:
+                with st.form("portfolio_etf_form", clear_on_submit=False):
+                    etf_selected = st.multiselect(
+                        "ETF 별도 관리 종목",
+                        options=tickers_list,
+                        default=portfolio.etf_tickers(),
+                        help="선택한 종목은 총 평가금액에는 포함되지만 QPM 분석, 백테스트, 리밸런싱, 매도 시그널에서는 제외됩니다.",
+                    )
+                    if st.form_submit_button("ETF 설정 저장", width="stretch"):
+                        selected = set(etf_selected)
+                        for ticker in tickers_list:
+                            portfolio.set_asset_type(ticker, "ETF" if ticker in selected else "STOCK")
+                        portfolio.save()
+                        inv("buy_result", "bt_result", "rebal_result", "sell_result", "signal_cache")
+                        st.success("ETF 설정이 저장되었습니다.")
+                        st.rerun()
+
             with st.form("portfolio_delete_form", clear_on_submit=False):
                 del_ticker = st.selectbox("삭제할 종목 선택", ["선택..."] + tickers_list, key="del_select")
                 if st.form_submit_button("삭제", width="stretch"):
@@ -332,7 +349,7 @@ def render(portfolio: Portfolio):
 </div>
 """, unsafe_allow_html=True)
 
-    # ── 종목 리스트 (HTML) — 상위 3개 + 더보기 ─────────────────
+    # ── 종목 리스트 (HTML) — QPM 대상 + ETF 별도 관리 ─────────────────
     names_map = st.session_state.get("ticker_names", {})
     def _holding_value(item):
         t, s = item
@@ -344,9 +361,18 @@ def render(portfolio: Portfolio):
         except Exception:
             return 0.0
 
-    all_items = sorted(holdings.items(), key=lambda item: (_holding_value(item), item[0]), reverse=True)
+    qpm_items = sorted(
+        [(t, s) for t, s in holdings.items() if not portfolio.is_etf(t)],
+        key=lambda item: (_holding_value(item), item[0]),
+        reverse=True,
+    )
+    etf_items = sorted(
+        [(t, s) for t, s in holdings.items() if portfolio.is_etf(t)],
+        key=lambda item: (_holding_value(item), item[0]),
+        reverse=True,
+    )
     show_all  = st.session_state.get("portfolio_show_all", False)
-    visible   = all_items if show_all else all_items[:3]
+    visible   = qpm_items if show_all else qpm_items[:3]
 
     def _stock_item_html(idx, t, s):
         p = val = None
@@ -358,7 +384,7 @@ def render(portfolio: Portfolio):
         color     = _ticker_color(t, idx)
         logo_html = _logo_or_abbr_html(t, portfolio.get_logo(t), color, "qpm-stock-icon")
         name_str  = names_map.get(t, "")
-        type_badge = " · ETF" if portfolio.is_etf(t) else ""
+        type_badge = " · ETF · QPM 제외" if portfolio.is_etf(t) else ""
         price_str = f"${p:,.2f}" if p else "—"
         val_str   = f"₩{val:,.0f}" if val else "—"
         yf_url    = f"https://finance.yahoo.com/quote/{t}/"
@@ -378,35 +404,43 @@ def render(portfolio: Portfolio):
 </div>
 </a>"""
 
-    items_html = "".join(_stock_item_html(i, t, s) for i, (t, s) in enumerate(visible))
-
-    remaining = len(all_items) - 3
-
-    st.markdown(f"""
+    if qpm_items:
+        items_html = "".join(_stock_item_html(i, t, s) for i, (t, s) in enumerate(visible))
+        st.markdown(f"""
 <div class="qpm-stock-list">
   {items_html}
 </div>
 """, unsafe_allow_html=True)
 
+    remaining = len(qpm_items) - 3
     if not show_all and remaining > 0:
         left_spacer, center_action, right_spacer = st.columns([1, 1, 1], gap="small")
         with center_action:
             if st.button(f"{remaining}개 종목 더보기", key="btn_show_all_stocks"):
                 st.session_state["portfolio_show_all"] = True
                 st.rerun()
-    elif show_all and len(all_items) > 3:
+    elif show_all and len(qpm_items) > 3:
         left_spacer, center_action, right_spacer = st.columns([1, 1, 1], gap="small")
         with center_action:
             if st.button("접기", key="btn_hide_stocks"):
                 st.session_state["portfolio_show_all"] = False
                 st.rerun()
 
+    if etf_items:
+        st.markdown(section_title("ETF 별도 관리"), unsafe_allow_html=True)
+        etf_html = "".join(_stock_item_html(i, t, s) for i, (t, s) in enumerate(etf_items))
+        st.markdown(f"""
+<div class="qpm-stock-list">
+  {etf_html}
+</div>
+""", unsafe_allow_html=True)
+
     render_management(expanded=False)
 
     # ── 인터랙티브 수량 편집 테이블 ───────────────────────
     st.markdown(section_title("수량 직접 편집"), unsafe_allow_html=True)
     df_hold = pd.DataFrame([{
-        "티커": t, "자산 유형": portfolio.asset_type(t), "보유 수량": s,
+        "티커": t, "보유 수량": s,
         "현재가 (USD)": (float(prices_map[t]) if prices_map is not None and t in prices_map else None),
         "평가금액 (KRW)": (float(prices_map[t]) * s * (fx or 1) if prices_map is not None and t in prices_map else None),
     } for t, s in holdings.items()])
@@ -418,12 +452,11 @@ def render(portfolio: Portfolio):
     edited_df = st.data_editor(
         df_hold,
         column_config={
-            "자산 유형":       st.column_config.SelectboxColumn("자산 유형", options=["STOCK", "ETF"]),
             "현재가 (USD)":   st.column_config.NumberColumn(format="$%.2f"),
             "평가금액 (KRW)": st.column_config.NumberColumn(format="₩%.0f"),
             "보유 수량":      st.column_config.NumberColumn(format="%.6f"),
         },
-        disabled=[c for c in df_hold.columns if c not in ("보유 수량", "자산 유형")],
+        disabled=[c for c in df_hold.columns if c != "보유 수량"],
         width="stretch", hide_index=True,
         key=f"hold_editor_{_ticker_hash}",
     )
@@ -431,12 +464,8 @@ def render(portfolio: Portfolio):
     for _, row in edited_df.iterrows():
         t = row["티커"]
         new_s = float(row["보유 수량"])
-        new_type = str(row.get("자산 유형", "STOCK"))
         if abs(new_s - holdings.get(t, 0.0)) > 1e-9:
             portfolio.set_holding(t, new_s)
-            changed = True
-        if new_type != portfolio.asset_type(t):
-            portfolio.set_asset_type(t, new_type)
             changed = True
     if changed:
         portfolio.save()
