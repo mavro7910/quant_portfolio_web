@@ -53,7 +53,10 @@ _DEFAULTS = {
     "weekly_budget": 100_000,
     "benchmarks": ["QQQM", "SPY"],
     "settings": {
-        "top_n": 10,
+        "top_n": 15,
+        "universe_mode": "auto_top100",
+        "rebalance_band_pct": 3.0,
+        "strategy_version": "academic_momentum_v1",
         "ai_provider": "gemini",
         "signal_lang": "ko",
         # 탭별 마지막 설정 (각 탭에서 자동 저장)
@@ -199,6 +202,40 @@ class Portfolio:
 
     def etf_tickers(self) -> list:
         return [t for t in self.tickers() if self.is_etf(t)]
+
+    @property
+    def strategy_selection(self) -> dict:
+        return self._data.setdefault("strategy_selection", {})
+
+    def locked_selection(self, year_month: str, top_n: int) -> list[str]:
+        selection = self.strategy_selection
+        if selection.get("year_month") != year_month:
+            return []
+        return [
+            str(t).upper()
+            for t in selection.get("tickers", [])
+            if t
+        ][:top_n]
+
+    def save_strategy_selection(
+        self,
+        year_month: str,
+        tickers: list[str],
+        universe_as_of: str,
+    ) -> None:
+        self._data["strategy_selection"] = {
+            "year_month": year_month,
+            "tickers": list(dict.fromkeys(t.upper() for t in tickers)),
+            "universe_as_of": universe_as_of,
+        }
+
+    def save_strategy_observation(self, observation: dict) -> None:
+        """Keep a compact rolling history for prospective API-signal validation."""
+        history = self._data.setdefault("strategy_observations", [])
+        key = observation.get("observed_at")
+        history[:] = [row for row in history if row.get("observed_at") != key]
+        history.append(observation)
+        history[:] = history[-52:]
 
     # ── 설정값 ────────────────────────────────────────────────────
 

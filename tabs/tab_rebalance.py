@@ -3,9 +3,11 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from datetime import date
 
 from core.portfolio import Portfolio
 from core.strategy import rebalance_weights
+from core.universe import get_universe
 from utils.ui import section_title, banner, metric_card, badge, TEAL, TEAL_DARK, TEAL_LIGHT, TEXT, TEXT_SUB, TEXT_MUTED, BORDER, SURFACE
 from utils.plotly_theme import TEAL, FONT_COLOR, TICK_COLOR
 
@@ -20,12 +22,14 @@ def render(portfolio: Portfolio):
     strategy_holdings = portfolio.strategy_holdings()
     strategy_tickers = list(strategy_holdings.keys())
     etf_count = len(portfolio.etf_tickers())
+    universe = get_universe()
+    year_month = date.today().strftime("%Y-%m")
 
     with st.expander("📅 리밸런싱이란?", expanded=False):
         st.markdown(banner(
             "시간이 지나면 종목별 수익률 차이로 인해 실제 비중이 목표 비중에서 벗어납니다.<br>"
-            "반기 또는 분기마다 초과 상승한 종목을 일부 매도하고 비중이 낮아진 종목을 매수해 "
-            "목표 비중으로 되돌리는 작업입니다.", "info"
+            "매월 선정된 Top N 목표와 실제 비중을 비교합니다. 작은 차이는 거래하지 않는 "
+            "허용밴드를 적용해 불필요한 매매를 줄입니다.", "info"
         ), unsafe_allow_html=True)
 
     if not strategy_tickers:
@@ -36,41 +40,46 @@ def render(portfolio: Portfolio):
 
     col_rb1, col_rb2, col_rb3 = st.columns([1.5, 1.5, 1.5])
     with col_rb1:
-        _saved_rb_preset = portfolio.get_setting("rebal_mcap_preset", "balanced")
-        _preset_opts     = list(_PRESET_LABELS.keys())
-        _preset_idx      = _preset_opts.index(_saved_rb_preset) if _saved_rb_preset in _preset_opts else 1
-        rb_mcap_preset = st.radio(
-            "시총 반영",
-            options=_preset_opts,
-            format_func=lambda k: _PRESET_LABELS[k],
-            index=_preset_idx,
-            horizontal=False,
-            key="rb_mcap_preset",
-        )
-    with col_rb2:
-        _max_rebal     = len(strategy_tickers)
         _saved_rebal_n = portfolio.get_setting("rebal_top_n", 15)
         rb_top_n = st.number_input(
-            "비중 산출 종목 수 (Top N)",
-            min_value=1, max_value=_max_rebal,
-            value=min(_saved_rebal_n, _max_rebal),
+            "월간 선정 종목 수",
+            min_value=5, max_value=30,
+            value=max(5, min(int(_saved_rebal_n), 30)),
             step=1, key="rb_topn",
+        )
+    with col_rb2:
+        band_pct = st.number_input(
+            "리밸런싱 허용밴드",
+            min_value=0.0, max_value=10.0,
+            value=float(portfolio.get_setting("rebalance_band_pct", 3.0)),
+            step=0.5, format="%.1f",
+            help="현재 비중과 목표 비중 차이가 이 값보다 작으면 거래하지 않습니다.",
         )
     with col_rb3:
         st.markdown('<div style="height:1.6rem"></div>', unsafe_allow_html=True)
         run_rebal = st.button("🔄 리밸런싱 계산 실행", key="btn_rebal", type="primary")
 
     if run_rebal:
-        portfolio.set_setting("rebal_mcap_preset", rb_mcap_preset)
         portfolio.set_setting("rebal_top_n", int(rb_top_n))
+        portfolio.set_setting("rebalance_band_pct", float(band_pct))
         portfolio.save()
         with st.spinner("시세 및 목표 비중 계산 중..."):
             try:
+                locked = portfolio.locked_selection(year_month, int(rb_top_n))
                 res_rb = rebalance_weights(
                     holdings=strategy_holdings,
-                    mcap_preset=rb_mcap_preset,
                     top_n=int(rb_top_n),
+                    universe_tickers=list(universe.tickers),
+                    locked_selection=locked or None,
                 )
+                if not locked:
+                    portfolio.save_strategy_selection(
+                        year_month,
+                        list(res_rb["weights"].index),
+                        universe.as_of,
+                    )
+                    portfolio.save()
+                res_rb["band_pct"] = float(band_pct)
                 st.session_state["rebal_result"] = res_rb
             except Exception as e:
                 st.error(f"오류 발생: {e}")
@@ -81,10 +90,13 @@ def render(portfolio: Portfolio):
     res_rb      = st.session_state["rebal_result"]
     prices_rb   = res_rb["prices"]
     weights_rb  = res_rb["weights"]
+    band_pct     = float(res_rb.get("band_pct", 3.0))
     fx_rb       = res_rb["fx_rate"]
     fx_est_rb   = res_rb.get("fx_estimated", False)
     is_bull_rb  = res_rb["is_bull"]
-    all_tickers = strategy_tickers
+    all_tickers = list(dict.fromkeys(
+        strategy_tickers + list(weights_rb.index)
+    ))
 
     if fx_est_rb:
         st.markdown(banner("⚠️ USD/KRW 환율 조회 실패 — 추정값 사용 중", "warn"), unsafe_allow_html=True)
@@ -156,9 +168,13 @@ def render(portfolio: Portfolio):
 }}
 @media (max-width: 768px) {{
   .qpm-rebal-summary {{
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }}
+  .qpm-rebal-card:last-child {{ grid-column: 1 / -1; }}
+}}
+@media (max-width: 420px) {{
+  .qpm-rebal-value {{ font-size: 1.08rem; }}
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -172,9 +188,11 @@ def render(portfolio: Portfolio):
         curr_val       = curr_val_usd.get(t, 0.0)
         curr_weight    = (curr_val / total_val_usd) if total_val_usd > 0 else 0.0
         target_weight  = float(weights_rb.get(t, 0.0)) if t in weights_rb.index else 0.0
+        weight_diff = target_weight - curr_weight
+        within_band = target_weight > 0 and abs(weight_diff * 100) < band_pct
         target_val_usd = total_val_usd * target_weight
         target_shares  = (target_val_usd / curr_price) if curr_price > 0 else 0.0
-        diff_shares    = target_shares - curr_shares
+        diff_shares    = 0.0 if within_band else target_shares - curr_shares
         diff_krw       = diff_shares * curr_price * fx_rb
 
         rows_rb.append({
@@ -183,7 +201,8 @@ def render(portfolio: Portfolio):
             "보유 수량":       curr_shares,
             "현재 비중 (%)":   curr_weight * 100,
             "목표 비중 (%)":   target_weight * 100,
-            "비중 차이 (%)":   (target_weight - curr_weight) * 100,
+            "비중 차이 (%)":   weight_diff * 100,
+            "판정":            "유지" if within_band else ("매수" if diff_shares > 0 else "매도" if diff_shares < 0 else "유지"),
             "조정 수량":       diff_shares,
             "조정 금액 (KRW)": diff_krw,
         })
@@ -336,6 +355,26 @@ def render(portfolio: Portfolio):
 }}
 @media (max-width: 768px) {{
   .qpm-trade-board {{ grid-template-columns: 1fr; }}
+}}
+@media (max-width: 480px) {{
+  .qpm-trade-head {{
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }}
+  .qpm-trade-total {{ text-align: left; font-size: 16px; }}
+  .qpm-trade-card {{
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 9px;
+  }}
+  .qpm-trade-card > div:last-child {{
+    grid-column: 2;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }}
+  .qpm-trade-amount {{ text-align: left; }}
+  .qpm-trade-shares {{ margin-top: 0; }}
 }}
 </style>
 """, unsafe_allow_html=True)

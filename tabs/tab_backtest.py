@@ -8,6 +8,7 @@ from datetime import date, timedelta
 
 from core.portfolio import Portfolio
 from core.strategy import run_backtest, calc_xirr_from_backtest, BENCHMARKS
+from core.universe import get_universe
 from utils.ui import section_title, banner, metric_card, badge, TEAL, TEAL_DARK, TEAL_LIGHT, TEXT, TEXT_SUB, TEXT_MUTED, BORDER, SURFACE
 from utils.plotly_theme import base_layout, TEAL, BLUE, AMBER, RED, PURPLE, GREEN, TICK_COLOR, FONT_COLOR
 
@@ -25,15 +26,27 @@ def _calc_annual_vol(series):
     return float(wr.std() * np.sqrt(52) * 100)
 
 
+def _return_metrics(returns, risk_free=0.04):
+    values = pd.Series(returns).dropna()
+    if len(values) < 4 or values.std() == 0:
+        return float("nan"), float("nan"), float("nan")
+    volatility = float(values.std() * np.sqrt(52) * 100)
+    sharpe = float((values.mean() * 52 - risk_free) / (values.std() * np.sqrt(52)))
+    curve = (1 + values).cumprod()
+    mdd = float((curve / curve.cummax() - 1).min() * -100)
+    return sharpe, volatility, mdd
+
+
 def render(portfolio: Portfolio):
-    mcap_preset = portfolio.get_setting("mcap_preset", "balanced")
+    mcap_preset = "factor"
     n_tickers   = portfolio.get_setting("top_n", 10)
     buy_res     = st.session_state.get("buy_result")
-    strategy_tickers = portfolio.strategy_tickers()
+    universe = get_universe()
+    strategy_tickers = list(universe.tickers)
     etf_count = len(portfolio.etf_tickers())
 
     _PRESET_LABELS = {"factor": "순수 팩터", "balanced": "균형", "mcap": "시총 편향"}
-    mcap_label = _PRESET_LABELS.get(mcap_preset, mcap_preset)
+    mcap_label = "자동 Top 100 · 순수 팩터"
 
     if buy_res:
         tickers_r    = buy_res["tickers"]
@@ -41,21 +54,20 @@ def render(portfolio: Portfolio):
         weight_parts = ", ".join(f"{t} {weights.get(t,0)*100:.1f}%" for t in tickers_r)
         # Fix4: bt_result가 캐시돼 있으면 실제 실행 당시 설정을 표시 (stale 방지)
         _bt_cached = st.session_state.get("bt_result_meta", {})
-        _display_mcap = _PRESET_LABELS.get(_bt_cached.get("mcap_preset", mcap_preset), mcap_label)
         _display_n    = _bt_cached.get("top_n", n_tickers)
         with st.expander("📌 매수 추천 탭 설정 반영 중", expanded=False):
             st.markdown(banner(
-                f"<b>시총 반영:</b> {_display_mcap} · <b>Top N:</b> {_display_n}<br>"
+                f"<b>유니버스:</b> 자동 Top 100 · <b>Top N:</b> {_display_n}<br>"
                 f"<b>종목 비중:</b> {weight_parts}", "info"
             ), unsafe_allow_html=True)
 
     with st.expander("ℹ️ 백테스트 해석 주의사항", expanded=False):
         st.markdown("""
 <div class="info-banner">
-① <b>생존 편향</b>: 현재 보유 종목으로만 시뮬레이션하므로 성과가 과대평가될 수 있습니다.<br>
-② <b>시가총액 근사</b>: 과거 시총은 현재 발행주수 × 과거 주가로 근사합니다.<br>
-③ <b>수익률 지표</b>: CAGR 대신 <b>XIRR</b>(적립식 내부수익률)을 사용합니다.<br>
-④ <b>t=0 통일</b>: QPM Alpha 전략과 벤치마크를 동일 시점·동일 금액으로 매수하여 공정 비교합니다.
+① <b>생존 편향</b>: 현재 Top 100을 과거에도 사용한 고정 유니버스이므로 성과가 과대평가될 수 있습니다.<br>
+② <b>체결 지연</b>: 전일 종가까지 신호를 계산하고 다음 거래일 종가로 체결합니다.<br>
+③ <b>수익률 지표</b>: XIRR과 입출금을 제거한 시간가중 수익률로 위험지표를 계산합니다.<br>
+④ <b>비교 기준</b>: QPM Alpha와 벤치마크에 동일 시점·동일 금액을 투자합니다.
 </div>
 """, unsafe_allow_html=True)
 
@@ -159,7 +171,11 @@ def render(portfolio: Portfolio):
         return
 
     df_bt   = st.session_state["bt_result"]
-    bm_cols = [c for c in df_bt.columns if c not in ("QPM_Alpha", "Invested")]
+    bm_cols = [
+        c for c in df_bt.columns
+        if c not in ("QPM_Alpha", "Invested", "QPM_Return")
+        and not c.endswith("_Return")
+    ]
 
     chart_mode = st.radio(
         "차트 기준", ["평가금액 (KRW)", "누적 수익률 (%)"],
@@ -241,10 +257,10 @@ def render(portfolio: Portfolio):
         ret_pct = (final / invested_final - 1) * 100 if invested_final > 0 else 0.0
         xirr_val = calc_xirr_from_backtest(df_bt, col=col)
         xirr_pct = xirr_val * 100 if not np.isnan(xirr_val) else None
-        running_max = df_bt[col].cummax()
-        mdd = ((running_max - df_bt[col]) / running_max.replace(0, np.nan)).max() * 100
-        sharpe  = _calc_sharpe(df_bt[col])
-        ann_vol = _calc_annual_vol(df_bt[col])
+        return_col = "QPM_Return" if col == "QPM_Alpha" else f"{col}_Return"
+        sharpe, ann_vol, mdd = _return_metrics(
+            df_bt[return_col] if return_col in df_bt else pd.Series(dtype=float)
+        )
 
         summary_rows.append({
             "전략":              "✅ QPM Alpha" if col == "QPM_Alpha" else BENCHMARKS.get(col, col),

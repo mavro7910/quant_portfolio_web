@@ -1,5 +1,7 @@
 ﻿"""tabs/tab_portfolio.py — 보유 종목 관리 탭"""
 
+from __future__ import annotations
+
 import base64, json, re, hashlib as _hashlib
 import pandas as pd
 import streamlit as st
@@ -329,7 +331,7 @@ def render(portfolio: Portfolio):
 </div>
 <div class="qpm-metric-grid">
   {metric_card("보유 종목 수", f"{len(holdings)}개")}
-  {metric_card("QPM 분석 대상", f"{len(strategy_tickers)}개", f"ETF {len(etf_tickers)}개 제외")}
+  {metric_card("보유 본주식", f"{len(strategy_tickers)}개", f"ETF {len(etf_tickers)}개 기록 전용")}
   {metric_card("총 평가금액 (USD)", f"${total_usd:,.2f}" if total_usd else "—", "현재가 기준")}
   {metric_card("USD / KRW", f"{fx:,.2f}", "실시간" if not fx_est else "추정값")}
 </div>
@@ -343,7 +345,7 @@ def render(portfolio: Portfolio):
 </div>
 <div class="qpm-metric-grid">
   {metric_card("보유 종목 수", f"{len(holdings)}개")}
-  {metric_card("QPM 분석 대상", f"{len(strategy_tickers)}개", f"ETF {len(etf_tickers)}개 제외")}
+  {metric_card("보유 본주식", f"{len(strategy_tickers)}개", f"ETF {len(etf_tickers)}개 기록 전용")}
   {metric_card("투자금", "—", "시세 갱신 필요")}
   {metric_card("USD / KRW", "—")}
 </div>

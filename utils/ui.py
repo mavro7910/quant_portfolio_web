@@ -111,7 +111,7 @@ GLOBAL_CSS = f"""
 [data-testid="stAppViewContainer"] > .main {{ background: transparent !important; }}
 [data-testid="stHeader"] {{ background: transparent !important; }}
 .block-container {{
-    max-width: 980px !important;
+    max-width: 1080px !important;
     padding-top: 28px !important;
     padding-bottom: 80px !important;
 }}
@@ -127,6 +127,9 @@ section[data-testid="stSidebar"] {{ background: #FFFFFF !important; }}
     padding: 0 4px !important;
     gap: 2px !important;
     border-bottom: 0.5px solid {BORDER} !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 50 !important;
 }}
 .stTabs [data-baseweb="tab"] {{
     border-radius: 0 !important;
@@ -400,6 +403,120 @@ div[data-testid="column"]:has(.stButton) .stButton {{ margin-bottom:0 !important
     font-size: 11px;
     margin-top: 2px;
 }}
+.qpm-rec-shell {{
+    background: var(--qpm-bg);
+    border: 0.5px solid var(--qpm-border);
+    border-radius: 12px;
+    padding: 4px 16px 10px;
+    margin: 8px 0 18px;
+}}
+.qpm-rec-head {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 0.5px solid var(--qpm-border);
+}}
+.qpm-rec-badges {{
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+}}
+.qpm-rec-budget {{
+    color: var(--qpm-text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+}}
+.qpm-rec-row {{
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 11px;
+    align-items: center;
+    min-height: 62px;
+    padding: 10px 0;
+    border-bottom: 0.5px solid var(--qpm-border);
+}}
+.qpm-rec-icon {{
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--qpm-surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+}}
+.qpm-rec-main {{ min-width: 0; }}
+.qpm-rec-name {{
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--qpm-text);
+    font-size: 14px;
+    font-weight: 700;
+}}
+.qpm-rec-rank {{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 6px;
+    background: var(--qpm-teal-light);
+    color: var(--qpm-teal-dark);
+    font-size: 10px;
+}}
+.qpm-rec-meta {{
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-top: 5px;
+    color: var(--qpm-text-muted);
+    font-size: 10.5px;
+}}
+.qpm-rec-chip {{
+    padding: 2px 6px;
+    border-radius: 99px;
+    background: var(--qpm-surface);
+    color: var(--qpm-text-sub);
+}}
+.qpm-rec-chip.warn {{ background: #FFF7E6; color: #9A6700; }}
+.qpm-rec-chip.risk {{ background: var(--qpm-danger-bg); color: var(--qpm-danger); }}
+.qpm-rec-figures {{
+    min-width: 118px;
+    text-align: right;
+}}
+.qpm-rec-amount {{
+    color: var(--qpm-text);
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+}}
+.qpm-rec-weight {{
+    margin-top: 4px;
+    color: var(--qpm-text-muted);
+    font-size: 10.5px;
+    white-space: nowrap;
+}}
+.qpm-rec-total {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 13px 0 3px;
+    color: var(--qpm-text-sub);
+    font-size: 12px;
+}}
+.qpm-rec-total strong {{
+    color: var(--qpm-teal);
+    font-size: 15px;
+}}
 .qpm-stock-list {{
     background: #FFFFFF;
     border: 0;
@@ -488,7 +605,6 @@ header    {{ visibility:hidden; }}
 @media (max-width: 768px) {{
     .qpm-metric-grid {{ grid-template-columns: 1fr 1fr !important; }}
     .qpm-form-row    {{ grid-template-columns: 1fr !important; }}
-    .qpm-rec-amount  {{ display:none !important; }}
     .stTabs [data-baseweb="tab"] {{
         padding: 9px 10px !important;
         font-size: 0.86rem !important;
@@ -502,8 +618,10 @@ header    {{ visibility:hidden; }}
 @media (max-width: 480px) {{
     .qpm-metric-grid {{ grid-template-columns: 1fr 1fr !important; }}
     .block-container {{
-        padding-left: 18px !important;
-        padding-right: 18px !important;
+        padding-top: 16px !important;
+        padding-left: 14px !important;
+        padding-right: 14px !important;
+        padding-bottom: calc(82px + env(safe-area-inset-bottom)) !important;
     }}
     .stTabs [data-baseweb="tab-list"] {{
         overflow-x: auto !important;
@@ -513,9 +631,18 @@ header    {{ visibility:hidden; }}
     .stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {{
         display: none !important;
     }}
+    .stTabs [data-baseweb="tab"] {{
+        min-height: 42px !important;
+        padding-left: 11px !important;
+        padding-right: 11px !important;
+    }}
     .stButton > button {{
         font-size: 0.93rem !important;
         min-height: 44px !important;
+    }}
+    div[data-testid="stColumn"] div[data-testid="stElementContainer"]:has(> div[data-testid="stButton"]),
+    div[data-testid="stColumn"] div[data-testid="stButton"] {{
+        width: 100% !important;
     }}
     .qpm-total-value {{
         font-size: 2.28rem;
@@ -559,8 +686,57 @@ header    {{ visibility:hidden; }}
         overflow: hidden;
         text-overflow: ellipsis;
     }}
-    .qpm-app-header {{ align-items:flex-start; flex-direction:column; }}
-    .qpm-user-pill {{ max-width:100%; }}
+    .qpm-app-header {{
+        align-items: center;
+        flex-direction: row;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }}
+    .qpm-logo-subtitle {{ display: none; }}
+    .qpm-user-pill {{
+        max-width: 34px;
+        padding: 5px;
+    }}
+    .qpm-user-pill span {{ display: none; }}
+    .qpm-avatar {{ width: 24px; height: 24px; }}
+    .qpm-rec-shell {{
+        margin-left: -2px;
+        margin-right: -2px;
+        padding: 3px 12px 9px;
+        border-radius: 10px;
+    }}
+    .qpm-rec-head {{
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 7px;
+    }}
+    .qpm-rec-row {{
+        grid-template-columns: 36px minmax(0, 1fr);
+        gap: 9px;
+        padding: 12px 0;
+    }}
+    .qpm-rec-figures {{
+        grid-column: 2;
+        min-width: 0;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        text-align: left;
+        margin-top: -2px;
+    }}
+    .qpm-rec-amount {{ font-size: 13.5px; }}
+    .qpm-rec-weight {{
+        margin-top: 0;
+        white-space: normal;
+        text-align: right;
+    }}
+    .qpm-rec-total {{
+        padding-top: 12px;
+    }}
+    .qpm-footer-status {{
+        padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    }}
 }}
 </style>
 """
@@ -595,6 +771,7 @@ section[data-testid="stSidebar"] {{
 .qpm-app-header,
 .stTabs [data-baseweb="tab-list"],
 .qpm-stock-list,
+.qpm-rec-shell,
 .qpm-trade-panel {{
     background: var(--qpm-bg) !important;
     border-color: var(--qpm-border) !important;
@@ -801,6 +978,10 @@ div[data-baseweb="popover"] * {{
 }}
 .qpm-weight-target {{
     background: #7DDFC4 !important;
+}}
+.qpm-rec-chip.warn {{
+    background: #332A17 !important;
+    color: #F2C66D !important;
 }}
 </style>
 """

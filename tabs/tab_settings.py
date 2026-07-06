@@ -25,27 +25,35 @@ def render(portfolio: Portfolio, user_email: str, user_name: str, file_key: str)
     st.markdown(section_title("투자 설정"), unsafe_allow_html=True)
     col_s1, col_s2 = st.columns(2)
     with col_s1:
-        new_budget = st.number_input("주간 투자 금액 (KRW)", min_value=10_000, max_value=100_000_000,
-                                     value=portfolio.weekly_budget, step=10_000)
+        new_budget = st.number_input(
+            "기본 주간 배분금액 (KRW)",
+            min_value=10_000, max_value=100_000_000,
+            value=portfolio.weekly_budget,
+            step=10_000,
+            help="이번 주 투자 화면에서 매번 원하는 금액으로 다시 입력할 수 있습니다.",
+        )
     with col_s2:
         new_bm = st.text_input("벤치마크 티커 (쉼표 구분)", value=", ".join(portfolio.benchmarks),
                                placeholder="QQQM, XLK, SPY")
     col_s3, _ = st.columns(2)
     with col_s3:
-        _strategy_tickers_cfg = portfolio.strategy_tickers()
-        _max_n_cfg = len(_strategy_tickers_cfg) if _strategy_tickers_cfg else 20
-        _saved_n   = portfolio.get_setting("top_n", 10)
-        new_top_n  = st.number_input("기본 추천 종목 수 (Top N)", min_value=1,
-                                     max_value=_max_n_cfg, value=min(_saved_n,_max_n_cfg), step=1)
+        _saved_n   = portfolio.get_setting("top_n", 15)
+        new_top_n  = st.number_input(
+            "기본 추천 종목 수 (Top N)",
+            min_value=5, max_value=30,
+            value=max(5, min(int(_saved_n), 30)), step=1,
+        )
+        st.caption("입력한 금액 전액을 추천 종목에 배분합니다.")
 
     if st.button("💾 설정 저장", key="btn_save_settings"):
-        portfolio.weekly_budget = new_budget
+        portfolio.weekly_budget = int(new_budget)
         bms = [b.strip().upper() for b in new_bm.split(",") if b.strip()]
         if not bms:
             st.error("벤치마크를 하나 이상 입력하세요.")
         else:
             portfolio.benchmarks = bms
             portfolio.set_setting("top_n", int(new_top_n))
+            portfolio.set_setting("strategy_version", "academic_momentum_v1")
             portfolio.save()
             st.success("✅ 설정이 저장되었습니다!")
 

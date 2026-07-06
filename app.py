@@ -12,7 +12,7 @@ from core.portfolio import Portfolio
 from utils.ui import inject_all, HEADER_GRAD, BORDER, TEAL, TEXT, TEXT_SUB, TEXT_MUTED, SURFACE, ICON_B64
 from tabs import (
     tab_portfolio, tab_ai_signal, tab_buyrec,
-    tab_backtest, tab_sell_signal, tab_rebalance, tab_settings,
+    tab_backtest, tab_rebalance, tab_settings,
 )
 
 _icon_path = Path(os.getcwd()) / "assets" / "icon.png"
@@ -37,7 +37,7 @@ def invalidate_cache(*keys):
 
 
 # ── 로그인 게이트 ────────────────────────────────────────
-if not st.user.is_logged_in:
+if not getattr(st.user, "is_logged_in", False):
     st.markdown(f"""
 <div style="background:#FFFFFF;border-bottom:0.5px solid {BORDER};
             padding:18px 0 16px;margin-bottom:22px;display:flex;align-items:center;gap:12px">
@@ -137,22 +137,21 @@ with _hcol3:
         st.logout()
 
 # ── 탭 ───────────────────────────────────────────────────
-tab_port, tab_sig, tab_buy, tab_bt, tab_sell, tab_rebal, tab_cfg = st.tabs([
-    "포트폴리오", "AI 시그널", "매수 추천",
-    "백테스트", "매도 신호", "리밸런싱", "설정",
+tab_port, tab_buy, tab_rebal, tab_sig, tab_bt, tab_cfg = st.tabs([
+    "포트폴리오", "이번 주 투자", "월간 리밸런싱",
+    "AI 인사이트", "백테스트", "설정",
 ])
 
 with tab_port:  tab_portfolio.render(portfolio)
-with tab_sig:   tab_ai_signal.render(portfolio, _file_key)
 with tab_buy:   tab_buyrec.render(portfolio)
-with tab_bt:    tab_backtest.render(portfolio)
-with tab_sell:  tab_sell_signal.render(portfolio)
 with tab_rebal: tab_rebalance.render(portfolio)
+with tab_sig:   tab_ai_signal.render(portfolio, _file_key)
+with tab_bt:    tab_backtest.render(portfolio)
 with tab_cfg:   tab_settings.render(portfolio, _user_email, _user_name, _file_key)
 
 st.markdown("""
 <div class="qpm-footer-status">
   <span class="qpm-status-dot"></span>
-  <span>Yahoo Finance 정상 · Finnhub 15/15</span>
+  <span>Academic Momentum · 자동 Top 100 · API 상태는 각 분석 화면에서 확인</span>
 </div>
 """, unsafe_allow_html=True)
