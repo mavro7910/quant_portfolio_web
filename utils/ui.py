@@ -488,7 +488,6 @@ header    {{ visibility:hidden; }}
 @media (max-width: 768px) {{
     .qpm-metric-grid {{ grid-template-columns: 1fr 1fr !important; }}
     .qpm-form-row    {{ grid-template-columns: 1fr !important; }}
-    .qpm-rec-amount  {{ display:none !important; }}
     .stTabs [data-baseweb="tab"] {{
         padding: 9px 10px !important;
         font-size: 0.86rem !important;

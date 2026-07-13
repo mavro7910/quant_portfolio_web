@@ -142,15 +142,17 @@ def render(portfolio: Portfolio):
                 f'display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">{t[:2]}</div>'
             )
         rows_html += f"""
-<div class="qpm-rec-row" style="display:grid;grid-template-columns:34px minmax(0,1fr) 46px minmax(76px,max-content);
-     gap:8px;align-items:center;padding:10px 0;border-bottom:0.5px solid rgba(15,110,86,0.08)">
-  {icon_html}
-  <div class="qpm-rec-info" style="min-width:0">
-    <div style="font-size:13.5px;font-weight:600;color:{TEXT}">{t}</div>
-    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:1px">#{i+1} · {shr:.4f}주</div>
+<div class="qpm-rec-row" style="display:flex;align-items:center;gap:8px;padding:10px 0;
+     border-bottom:0.5px solid rgba(15,110,86,0.08);min-width:0">
+  <div style="flex:0 0 32px">{icon_html}</div>
+  <div class="qpm-rec-info" style="min-width:0;flex:1 1 auto">
+    <div style="font-size:13.5px;font-weight:600;color:{TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{t}</div>
+    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#{i+1} · {shr:.4f}주</div>
   </div>
-  <div class="qpm-rec-weight" style="font-size:13px;font-weight:600;color:{TEAL};text-align:right">{w:.1f}%</div>
-  <div class="qpm-rec-amount" style="font-size:12px;color:{TEXT_SUB};text-align:right">₩{krw:,.0f}</div>
+  <div class="qpm-rec-values" style="flex:0 0 auto;min-width:86px;text-align:right">
+    <div class="qpm-rec-weight" style="font-size:13px;font-weight:600;color:{TEAL};line-height:1.2">{w:.1f}%</div>
+    <div class="qpm-rec-amount" style="font-size:12px;color:{TEXT_SUB};line-height:1.35;white-space:nowrap">₩{krw:,.0f}</div>
+  </div>
 </div>"""
 
     regime_badge = badge("강세장","bull") if is_bull else badge("약세장","bear")
@@ -173,30 +175,18 @@ def render(portfolio: Portfolio):
 <style>
 @media (max-width: 480px) {{
   .qpm-rec-row {{
-    grid-template-columns: 30px minmax(0, 1fr) minmax(76px, max-content) !important;
-    grid-template-rows: auto auto;
-    column-gap: 7px !important;
-    row-gap: 0 !important;
-  }}
-  .qpm-rec-row > :first-child {{
-    grid-column: 1;
-    grid-row: 1 / span 2;
+    gap: 7px !important;
   }}
   .qpm-rec-info {{
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    overflow: hidden;
+    min-width: 0 !important;
   }}
-  .qpm-rec-weight {{
-    grid-column: 3;
-    grid-row: 1;
-    font-size: 12px !important;
+  .qpm-rec-values {{
+    min-width: 82px !important;
   }}
+  .qpm-rec-weight {{ font-size: 12px !important; }}
   .qpm-rec-amount {{
-    grid-column: 3;
-    grid-row: 2;
+    display: block !important;
     font-size: 11px !important;
-    white-space: nowrap;
   }}
 }}
 </style>
