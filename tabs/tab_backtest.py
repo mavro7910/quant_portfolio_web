@@ -228,7 +228,7 @@ def render(portfolio: Portfolio):
         margin=dict(t=60, b=90, l=60, r=16),
     ))
     fig.update_layout(lay)
-    st.plotly_chart(fig, width="stretch", key="bt_chart")
+    st.plotly_chart(fig, use_container_width=True, key="bt_chart")
 
     # ── 성과 요약 ──────────────────────────────────────────
     st.markdown(section_title("성과 요약"), unsafe_allow_html=True)

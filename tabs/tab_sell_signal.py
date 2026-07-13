@@ -351,4 +351,4 @@ def _render_sell_result(portfolio, top_n_sell):
             showline=False,
         ),
     )
-    st.plotly_chart(fig_hm, width="stretch", key="sell_heatmap")
+    st.plotly_chart(fig_hm, use_container_width=True, key="sell_heatmap")

@@ -208,4 +208,4 @@ def render(portfolio: Portfolio):
                     font=dict(color="#9cb8b4", size=11), bgcolor="rgba(0,0,0,0)"),
         title=dict(text="목표 비중", font=dict(color="#7aada8", size=12), x=0.01),
     ))
-    st.plotly_chart(fig_pie, width="stretch", key="pie_chart")
+    st.plotly_chart(fig_pie, use_container_width=True, key="pie_chart")
