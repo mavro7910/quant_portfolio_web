@@ -161,7 +161,7 @@ def render(portfolio: Portfolio):
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  color: {TEXT_MUTED};
+  color: var(--qpm-text-muted, {TEXT_MUTED});
   font-size: 11px;
   margin: 4px 0 10px;
   flex-wrap: wrap;
@@ -175,14 +175,14 @@ def render(portfolio: Portfolio):
   width: 100%;
   box-sizing: border-box;
   padding: 12px 2px;
-  border-bottom: 0.5px solid rgba(15,110,86,0.1);
+  border-bottom: 0.5px solid var(--qpm-border, rgba(15,110,86,0.1));
 }}
 .qpm-buy-icon {{
   width: 34px;
   height: 34px;
   flex: 0 0 34px;
   border-radius: 9px;
-  background: #F7F8FA;
+  background: var(--qpm-surface, #F7F8FA);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -202,19 +202,19 @@ def render(portfolio: Portfolio):
   flex: 1 1 auto;
 }}
 .qpm-buy-rec-title {{
-  color: {TEXT};
+  color: var(--qpm-text, {TEXT});
   font-size: 13.5px;
   font-weight: 700;
   line-height: 1.25;
 }}
 .qpm-buy-rec-meta {{
-  color: {TEXT_MUTED};
+  color: var(--qpm-text-muted, {TEXT_MUTED});
   font-size: 11px;
   line-height: 1.35;
   margin-top: 2px;
 }}
 .qpm-buy-rec-amount {{
-  color: {TEAL};
+  color: var(--qpm-teal, {TEAL});
   font-size: 14px;
   font-weight: 800;
   line-height: 1.3;
@@ -222,7 +222,7 @@ def render(portfolio: Portfolio):
   overflow-wrap: anywhere;
 }}
 .qpm-buy-rec-total {{
-  color: {TEAL};
+  color: var(--qpm-teal, {TEAL});
   font-size: 14px;
   font-weight: 800;
   text-align: right;
