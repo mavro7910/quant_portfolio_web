@@ -116,22 +116,124 @@ def render(portfolio: Portfolio):
 </div>
 """, unsafe_allow_html=True)
 
-    # ── 매수 추천 리스트 ─────────────────────────────
+    # ── 매수 추천 카드 ─────────────────────────────
     st.markdown(section_title("이번 주 매수 추천"), unsafe_allow_html=True)
     _colors = [TEAL,"#4a90d9","#c9873a","#8b72c8","#5ab87a","#e05252","#a0b4b2","#3a8fc8"]
-    st.caption(f"{regime_text} · {_PRESET_LABELS.get(mcap_pname,mcap_pname)} · 예산 ₩{budget:,}")
+    rows_html = ""
     for i, t in enumerate(tickers_r):
         w   = safe_get(weights, t) * 100
         krw = safe_get(buy_krw, t)
         shr = safe_get(buy_shares, t)
-        st.markdown(
-            f"**#{i + 1} {t}**  \n"
-            f"비중 **{w:.1f}%**  \n"
-            f"매수금액 **₩{krw:,.0f}**  \n"
-            f"매수수량 `{shr:.4f}주`"
-        )
-        st.divider()
-    st.markdown(f"**총 ₩{total_buy:,.0f}**")
+        c   = _colors[i % len(_colors)]
+        logo_url = portfolio.get_logo(t)
+        if logo_url:
+            icon_html = (
+                f'<div class="qpm-buy-icon">'
+                f'<img src="{logo_url}" alt="{t}" '
+                f'onerror="this.remove();this.parentElement.textContent=\'{t[:2]}\';'
+                f'this.parentElement.style.color=\'{c}\'">'
+                f'</div>'
+            )
+        else:
+            icon_html = f'<div class="qpm-buy-icon" style="color:{c};background:{c}18">{t[:2]}</div>'
+
+        rows_html += f"""
+<div class="qpm-buy-rec-card">
+  {icon_html}
+  <div class="qpm-buy-rec-body">
+    <div class="qpm-buy-rec-title">#{i + 1} {t}</div>
+    <div class="qpm-buy-rec-meta">비중 <b>{w:.1f}%</b> · 매수수량 {shr:.4f}주</div>
+    <div class="qpm-buy-rec-amount">매수금액 ₩{krw:,.0f}</div>
+  </div>
+</div>"""
+
+    st.markdown(f"""
+<div class="qpm-buy-rec-head">
+  <span>{regime_text} · {_PRESET_LABELS.get(mcap_pname,mcap_pname)}</span>
+  <span>예산 ₩{budget:,}</span>
+</div>
+<div class="qpm-buy-rec-list">
+  {rows_html}
+</div>
+<div class="qpm-buy-rec-total">총 ₩{total_buy:,.0f}</div>
+<style>
+.qpm-buy-rec-head {{
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: {TEXT_MUTED};
+  font-size: 11px;
+  margin: 4px 0 10px;
+  flex-wrap: wrap;
+}}
+.qpm-buy-rec-list {{
+  width: 100%;
+}}
+.qpm-buy-rec-card {{
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 2px;
+  border-bottom: 0.5px solid rgba(15,110,86,0.1);
+}}
+.qpm-buy-icon {{
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 9px;
+  background: #F7F8FA;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}}
+.qpm-buy-icon img {{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 5px;
+  box-sizing: border-box;
+}}
+.qpm-buy-rec-body {{
+  min-width: 0;
+  flex: 1 1 auto;
+}}
+.qpm-buy-rec-title {{
+  color: {TEXT};
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.25;
+}}
+.qpm-buy-rec-meta {{
+  color: {TEXT_MUTED};
+  font-size: 11px;
+  line-height: 1.35;
+  margin-top: 2px;
+}}
+.qpm-buy-rec-amount {{
+  color: {TEAL};
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}}
+.qpm-buy-rec-total {{
+  color: {TEAL};
+  font-size: 14px;
+  font-weight: 800;
+  text-align: right;
+  margin-top: 10px;
+}}
+@media (max-width: 480px) {{
+  .qpm-buy-rec-card {{ gap: 10px; padding: 12px 0; }}
+  .qpm-buy-rec-amount {{ font-size: 13.5px; }}
+}}
+</style>
+""", unsafe_allow_html=True)
 
     # ── 상세 테이블 ────────────────────────────────────────
     with st.expander("📊 상세 내역 보기", expanded=False):
