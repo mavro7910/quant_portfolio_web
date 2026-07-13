@@ -116,81 +116,22 @@ def render(portfolio: Portfolio):
 </div>
 """, unsafe_allow_html=True)
 
-    # ── 매수 추천 카드 (HTML) ─────────────────────────────
+    # ── 매수 추천 리스트 ─────────────────────────────
     st.markdown(section_title("이번 주 매수 추천"), unsafe_allow_html=True)
-    rows_html = ""
     _colors = [TEAL,"#4a90d9","#c9873a","#8b72c8","#5ab87a","#e05252","#a0b4b2","#3a8fc8"]
+    st.caption(f"{regime_text} · {_PRESET_LABELS.get(mcap_pname,mcap_pname)} · 예산 ₩{budget:,}")
     for i, t in enumerate(tickers_r):
         w   = safe_get(weights, t) * 100
         krw = safe_get(buy_krw, t)
         shr = safe_get(buy_shares, t)
-        c   = _colors[i % len(_colors)]
-        logo_url = portfolio.get_logo(t)
-        if logo_url:
-            icon_html = (
-                f'<div style="width:32px;height:32px;border-radius:9px;background:#F7F8FA;overflow:hidden;'
-                f'display:flex;align-items:center;justify-content:center">'
-                f'<img src="{logo_url}" alt="{t}" '
-                f'style="width:100%;height:100%;object-fit:contain;padding:5px;border-radius:inherit" '
-                f'onerror="this.remove();this.parentElement.textContent=\'{t[:2]}\';'
-                f'this.parentElement.style.color=\'{c}\'">'
-                f'</div>'
-            )
-        else:
-            icon_html = (
-                f'<div style="width:32px;height:32px;border-radius:9px;background:{c}18;color:{c};'
-                f'display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">{t[:2]}</div>'
-            )
-        rows_html += f"""
-<div class="qpm-rec-row" style="display:flex;align-items:center;gap:8px;padding:10px 0;
-     border-bottom:0.5px solid rgba(15,110,86,0.08);min-width:0">
-  <div style="flex:0 0 32px">{icon_html}</div>
-  <div class="qpm-rec-info" style="min-width:0;flex:1 1 auto">
-    <div style="font-size:13.5px;font-weight:600;color:{TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{t}</div>
-    <div style="font-size:11px;color:{TEXT_MUTED};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#{i+1} · {shr:.4f}주</div>
-  </div>
-  <div class="qpm-rec-values" style="flex:0 0 auto;min-width:86px;text-align:right">
-    <div class="qpm-rec-weight" style="font-size:13px;font-weight:600;color:{TEAL};line-height:1.2">{w:.1f}%</div>
-    <div class="qpm-rec-amount" style="font-size:12px;color:{TEXT_SUB};line-height:1.35;white-space:nowrap">₩{krw:,.0f}</div>
-  </div>
-</div>"""
-
-    regime_badge = badge("강세장","bull") if is_bull else badge("약세장","bear")
-    preset_badge = badge(_PRESET_LABELS.get(mcap_pname,mcap_pname),"gold")
-
-    st.markdown(f"""
-<div style="background:#FFFFFF;border:0;border-radius:0;padding:15px 0;margin:4px 0">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px">
-    <div style="display:flex;align-items:center;gap:7px">
-      {regime_badge} {preset_badge}
-    </div>
-    <span style="font-size:11px;color:{TEXT_MUTED}">예산 ₩{budget:,} · QPM Alpha</span>
-  </div>
-  {rows_html}
-  <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid rgba(15,110,86,0.1);
-              font-size:13px;font-weight:700;color:{TEAL};text-align:right">
-    총 ₩{total_buy:,.0f}
-  </div>
-</div>
-<style>
-@media (max-width: 480px) {{
-  .qpm-rec-row {{
-    gap: 7px !important;
-  }}
-  .qpm-rec-info {{
-    min-width: 0 !important;
-  }}
-  .qpm-rec-values {{
-    min-width: 82px !important;
-  }}
-  .qpm-rec-weight {{ font-size: 12px !important; }}
-  .qpm-rec-amount {{
-    display: block !important;
-    font-size: 11px !important;
-  }}
-}}
-</style>
-""", unsafe_allow_html=True)
+        st.markdown(
+            f"**#{i + 1} {t}**  \n"
+            f"비중 **{w:.1f}%**  \n"
+            f"매수금액 **₩{krw:,.0f}**  \n"
+            f"매수수량 `{shr:.4f}주`"
+        )
+        st.divider()
+    st.markdown(f"**총 ₩{total_buy:,.0f}**")
 
     # ── 상세 테이블 ────────────────────────────────────────
     with st.expander("📊 상세 내역 보기", expanded=False):
