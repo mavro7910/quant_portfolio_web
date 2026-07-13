@@ -207,18 +207,21 @@ quant_portfolio_web/
 
 | Package | Version |
 |---|---|
-| `streamlit` | `1.56.0` |
-| `yfinance` | `>=1.2.0` |
-| `pandas` | `>=2.2.0,<3.0` |
-| `numpy` | `>=1.26.0,<2.1` |
-| `plotly` | `>=5.22.0` |
-| `scipy` | `>=1.13.0` |
-| `Pillow` | `>=10.3.0` |
-| `requests` | `>=2.32.0` |
-| `supabase` | `>=2.0.0` |
+| `streamlit` | `1.50.0` |
+| `altair` | `5.5.0` |
+| `pyarrow` | `17.0.0` |
+| `protobuf` | `4.25.8` |
+| `numpy` | `1.26.4` |
+| `pandas` | `2.2.3` |
+| `scipy` | `1.13.1` |
+| `plotly` | `5.24.1` |
+| `Pillow` | `10.4.0` |
+| `yfinance` | `1.5.1` |
+| `requests` | `2.32.4` |
+| `supabase` | `2.31.0` |
 | `authlib` | `1.6.11` |
-| `google-generativeai` | `>=0.8.0` |
-| `cryptography` | `>=42.0.0` |
+| `google-generativeai` | `0.8.6` |
+| `cryptography` | `43.0.3` |
 
 ---
 
