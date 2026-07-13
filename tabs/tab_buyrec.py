@@ -142,14 +142,14 @@ def render(portfolio: Portfolio):
                 f'display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700">{t[:2]}</div>'
             )
         rows_html += f"""
-<div class="qpm-rec-row" style="display:grid;grid-template-columns:34px 1fr 52px 90px;
-     gap:10px;align-items:center;padding:10px 0;border-bottom:0.5px solid rgba(15,110,86,0.08)">
+<div class="qpm-rec-row" style="display:grid;grid-template-columns:34px minmax(0,1fr) 46px minmax(76px,max-content);
+     gap:8px;align-items:center;padding:10px 0;border-bottom:0.5px solid rgba(15,110,86,0.08)">
   {icon_html}
-  <div>
+  <div class="qpm-rec-info" style="min-width:0">
     <div style="font-size:13.5px;font-weight:600;color:{TEXT}">{t}</div>
     <div style="font-size:11px;color:{TEXT_MUTED};margin-top:1px">#{i+1} · {shr:.4f}주</div>
   </div>
-  <div style="font-size:13px;font-weight:600;color:{TEAL};text-align:right">{w:.1f}%</div>
+  <div class="qpm-rec-weight" style="font-size:13px;font-weight:600;color:{TEAL};text-align:right">{w:.1f}%</div>
   <div class="qpm-rec-amount" style="font-size:12px;color:{TEXT_SUB};text-align:right">₩{krw:,.0f}</div>
 </div>"""
 
@@ -170,6 +170,36 @@ def render(portfolio: Portfolio):
     총 ₩{total_buy:,.0f}
   </div>
 </div>
+<style>
+@media (max-width: 480px) {{
+  .qpm-rec-row {{
+    grid-template-columns: 30px minmax(0, 1fr) minmax(76px, max-content) !important;
+    grid-template-rows: auto auto;
+    column-gap: 7px !important;
+    row-gap: 0 !important;
+  }}
+  .qpm-rec-row > :first-child {{
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }}
+  .qpm-rec-info {{
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    overflow: hidden;
+  }}
+  .qpm-rec-weight {{
+    grid-column: 3;
+    grid-row: 1;
+    font-size: 12px !important;
+  }}
+  .qpm-rec-amount {{
+    grid-column: 3;
+    grid-row: 2;
+    font-size: 11px !important;
+    white-space: nowrap;
+  }}
+}}
+</style>
 """, unsafe_allow_html=True)
 
     # ── 상세 테이블 ────────────────────────────────────────
